@@ -9,6 +9,7 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 30C14 24 6 19 6 12a10 10 0 0 1 20 0c0 7-8 12-10 18z' fill='%232a4bd7'/%3E%3Ccircle cx='16' cy='12' r='4' fill='%23fff'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="css/style.css?v=15">
   <link rel="stylesheet" href="css/warpath.css?v=8">
+  <link rel="stylesheet" href="css/kbc.css?v=3">
 </head>
 <body>
   <!-- shared textures for the line-art illustrations -->
@@ -218,6 +219,19 @@
             <span class="tile-desc">Pick an empire and march to war. Every moment in history is a fight: guess its year, slay the enemy, and build a wonder.</span>
             <span class="tile-go">March →</span>
           </button>
+          <button class="tile tile-kbc" id="playKbc" data-kbc>
+            <svg class="art" viewBox="0 0 200 140" aria-hidden="true">
+              <path d="M100 8v14M60 18l8 12M140 18l-8 12M30 44l13 6M170 44l-13 6"/>
+              <circle cx="100" cy="64" r="30" fill="url(#stipw)"/><circle cx="100" cy="64" r="30"/><circle cx="100" cy="64" r="22"/>
+              <path d="M90 52h20M90 60h20M95 52q14 0 14 8t-14 8l14 12"/>
+              <path d="M20 112l12-10h136l12 10-12 10H32z"/><path d="M46 112h108" stroke-dasharray="3 5"/>
+              <path d="M30 134l8-6h48l8 6-8 6H38zM106 134l8-6h48l8 6-8 6h-48z"/>
+            </svg>
+            <span class="tile-eyebrow">New · KBC-style quiz</span>
+            <span class="tile-name">Crorepati</span>
+            <span class="tile-desc">17 questions from ₹1,000 to ₹7 Crore, with padavs, four lifelines and the full answer after each one. Normal or Tough, solo or with a partner.</span>
+            <span class="tile-go">Take the hot seat →</span>
+          </button>
           <button class="tile tile-infinite" id="playInfinite">
             <svg class="art" viewBox="0 0 200 140" aria-hidden="true">
               <g transform="translate(30 30)"><circle r="13"/><path d="M0-19L3-3 19 0 3 3 0 19-3 3-19 0-3-3z" fill="url(#stipw)"/><path d="M0-19L3-3 19 0 3 3 0 19-3 3-19 0-3-3z"/></g>
@@ -352,6 +366,7 @@
         <button class="menu-item" data-go="infinite"><i class="m-ico m2">∞</i>Infinite mode</button>
         <button class="menu-item" data-go="friends"><i class="m-ico m4">⚑</i>Play with friends</button>
         <button class="menu-item" data-warpath><i class="m-ico m6">⚔</i>Warpath (guess the year)</button>
+        <button class="menu-item" data-kbc><i class="m-ico m7">₹</i>Crorepati (KBC quiz)</button>
         <div class="menu-sep"></div>
         <button class="menu-item" data-go="help"><i class="m-ico">?</i>How to play</button>
         <button class="menu-item" data-go="settings"><i class="m-ico">⚙</i>Settings</button>
@@ -421,6 +436,9 @@
       <div class="wp-stage"><canvas id="wpCanvas" aria-label="A dot-matrix gladiator on a map of the Mauryan Empire" role="img"></canvas></div>
       <div class="wp-panel" id="wpPanel" aria-live="polite"></div>
     </section>
+
+    <!-- Crorepati: a KBC-style quiz (js/kbc.js builds the stage) -->
+    <section class="kbc" id="kbc" hidden aria-label="Crorepati, a KBC-style quiz"></section>
   </div>
 
   <script src="vendor/d3.min.js?v=6"></script>
@@ -435,5 +453,10 @@
   <script src="js/app.js?v=14"></script>
   <script src="js/warpath-empires.js?v=2"></script>
   <script src="js/warpath-ui.js?v=11"></script>
+  <script src="data/kbc.js?v=3"></script>
+  <script src="data/kbc-more.js?v=1"></script>
+  <script src="data/kbc-more2.js?v=1"></script>
+  <script src="js/kbc-fx.js?v=2"></script>
+  <script src="js/kbc.js?v=3"></script>
 </body>
 </html>

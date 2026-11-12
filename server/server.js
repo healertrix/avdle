@@ -13,6 +13,7 @@ const path = require("node:path");
 const crypto = require("node:crypto");
 const { WebSocketServer } = require("ws");
 const hub = require("./rooms.js"); // the game logic, shared with the Cloudflare Worker
+const kbcHub = require("./kbc-rooms.js"); // Crorepati two-player rooms
 
 const PORT = Number(process.env.PORT) || 8787;
 const ROOT = path.join(__dirname, "..");
@@ -87,17 +88,32 @@ const server = http.createServer((req, res) => {
 // ---------------------------------------------------------------------
 // Rooms over WebSockets (the game logic is in rooms.js)
 // ---------------------------------------------------------------------
-const wss = new WebSocketServer({ server, path: "/ws", maxPayload: 4096 });
-wss.on("connection", (ws) => {
-  const c = hub.connect(ws);
-  ws.on("message", (raw) => c.message(raw.toString()));
-  ws.on("close", c.close);
+// /ws is Avdle's rooms; /ws-kbc is Crorepati's two-player rooms.
+const wss = new WebSocketServer({ noServer: true, maxPayload: 4096 });
+const kbcWss = new WebSocketServer({ noServer: true, maxPayload: 25000 });
+server.on("upgrade", (req, socket, head) => {
+  let p = "";
+  try {
+    p = new URL(req.url, "http://x").pathname;
+  } catch {}
+  const target = p === "/ws" ? wss : p === "/ws-kbc" ? kbcWss : null;
+  if (!target) return socket.destroy();
+  target.handleUpgrade(req, socket, head, (ws) => target.emit("connection", ws, req));
 });
+const wire = (server2, h) =>
+  server2.on("connection", (ws) => {
+    const c = h.connect(ws);
+    ws.on("message", (raw) => c.message(raw.toString()));
+    ws.on("close", c.close);
+  });
+wire(wss, hub);
+wire(kbcWss, kbcHub);
 setInterval(hub.sweep, 60_000).unref();
+setInterval(kbcHub.sweep, 60_000).unref();
 
 // Keep connections alive through proxies/tunnels.
 setInterval(() => {
-  for (const ws of wss.clients) if (ws.readyState === 1) ws.ping();
+  for (const ws of [...wss.clients, ...kbcWss.clients]) if (ws.readyState === 1) ws.ping();
 }, 25_000).unref();
 
 server.listen(PORT, () => {
