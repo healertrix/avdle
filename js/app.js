@@ -2747,13 +2747,22 @@
     const acts = el("div", "camp-actions ht-actions");
     const close = () => ($("#howto").hidden = true);
     if (onStart) {
-      const skip = el("label", "toggle ht-skip");
-      const cb = document.createElement("input");
-      cb.type = "checkbox";
-      skip.append(cb, el("span", null, "Don't show this again"));
+      // a plain on/off button (saved the moment you tap it)
+      const skip = el("button", "ht-skip");
+      skip.type = "button";
+      const paintSkip = () => {
+        const on = store.get("howtoSkip." + kind, false);
+        skip.classList.toggle("on", on);
+        skip.setAttribute("aria-pressed", String(on));
+        skip.replaceChildren(el("span", "ht-box", on ? "✓" : ""), el("span", null, "Don't show this again"));
+      };
+      skip.addEventListener("click", () => {
+        store.set("howtoSkip." + kind, !store.get("howtoSkip." + kind, false));
+        paintSkip();
+      });
+      paintSkip();
       const go = el("button", "btn primary", "Let's go ▶");
       go.addEventListener("click", () => {
-        if (cb.checked) store.set("howtoSkip." + kind, true);
         close();
         onStart();
       });
