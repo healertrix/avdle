@@ -1,0 +1,432 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Avdle</title>
+  <meta name="description" content="A geography game: pin a country that fits the prompt, or name a famous person from where they were born and died. The less obvious your answer, the more it scores.">
+  <meta name="theme-color" content="#ffffff">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 30C14 24 6 19 6 12a10 10 0 0 1 20 0c0 7-8 12-10 18z' fill='%232a4bd7'/%3E%3Ccircle cx='16' cy='12' r='4' fill='%23fff'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="css/style.css?v=13">
+  <link rel="stylesheet" href="css/warpath.css?v=6">
+</head>
+<body>
+  <!-- shared textures for the line-art illustrations -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <pattern id="stip" width="5" height="5" patternUnits="userSpaceOnUse"><circle cx="1.2" cy="1.2" r="0.9" fill="#18233f"/></pattern>
+      <pattern id="stipw" width="5" height="5" patternUnits="userSpaceOnUse"><circle cx="1.2" cy="1.2" r="0.9" fill="#ffffff"/></pattern>
+    </defs>
+  </svg>
+
+  <div id="app">
+    <header class="topbar" id="topbar">
+      <button class="icon-btn" id="menuBtn" aria-label="Menu" title="Menu">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10"/></svg>
+      </button>
+      <button class="brand" id="homeBtn" aria-label="Avdle home">
+        <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 30C14 24 6 19 6 12a10 10 0 0 1 20 0c0 7-8 12-10 18z"/><circle cx="16" cy="12" r="4"/></svg>
+        <span>avdle</span>
+      </button>
+      <div class="run-info" id="runInfo" hidden>
+        <span id="modeLabel"></span>
+        <strong id="scoreLabel">0</strong>
+      </div>
+      <nav class="top-actions">
+        <button class="pill-btn exit-btn" id="exitBtn" hidden title="Leave this screen">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg><span>Exit</span>
+        </button>
+        <button class="icon-btn" id="helpBtn" aria-label="How to play" title="How to play">?</button>
+        <button class="icon-btn" id="settingsBtn" aria-label="Settings" title="Settings">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>
+        </button>
+      </nav>
+    </header>
+
+    <main class="stage">
+      <div id="map" class="map" tabindex="0" role="application" aria-label="World map. Arrow keys pan, plus and minus zoom, Enter drops the pin."></div>
+
+      <section class="card prompt-card" id="promptCard" hidden aria-live="polite">
+        <div class="prompt-meta">
+          <span id="promptCount"></span>
+          <span id="promptFamily" class="family"></span>
+          <span class="timer" id="timer" hidden></span>
+        </div>
+        <h1 id="promptText"></h1>
+        <p class="prompt-note" id="promptNote"></p>
+        <p class="prompt-hint" id="promptHint" hidden></p>
+      </section>
+
+      <div class="zoom-ctl" id="zoomCtl" hidden>
+        <button class="icon-btn" data-zoom="in" aria-label="Zoom in">+</button>
+        <button class="icon-btn" data-zoom="out" aria-label="Zoom out">−</button>
+        <button class="icon-btn" data-zoom="reset" aria-label="Show whole world">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M4 12h16M12 4c3 3 3 13 0 16M12 4c-3 3-3 13 0 16"/></svg>
+        </button>
+      </div>
+
+      <!-- picking -->
+      <footer class="card dock" id="dock" hidden>
+        <div class="pick" id="pick"><span class="pick-hint">Tap the map to place your pin</span></div>
+        <button class="btn primary" id="dropBtn" disabled>Drop pin</button>
+      </footer>
+
+      <!-- who lived here? type a name -->
+      <footer class="card dock guess-dock" id="guessDock" hidden>
+        <form class="guess-form" id="guessForm" autocomplete="off">
+          <input id="guessInput" maxlength="60" placeholder="Type their name…" autocomplete="off" autocapitalize="words" spellcheck="false" enterkeyhint="go" aria-label="Your guess">
+          <button type="submit" class="btn primary" id="guessBtn">Guess</button>
+        </form>
+        <div class="guess-extra" id="guessExtra">
+          <button type="button" class="link-btn" id="hintBtn">Hint: what they did (half points)</button>
+          <button type="button" class="link-btn muted-link" id="passBtn">I don't know</button>
+        </div>
+        <div class="guess-status" id="guessStatus" hidden></div>
+      </footer>
+
+      <!-- dates: guess the year -->
+      <footer class="card dock year-dock" id="yearDock" hidden>
+        <form class="year-form" id="yearForm" autocomplete="off">
+          <div class="year-row">
+            <button type="button" class="btn year-step" data-step="-10" aria-label="10 years earlier">−10</button>
+            <button type="button" class="btn year-step" data-step="-1" aria-label="1 year earlier">−1</button>
+            <input id="yearInput" inputmode="numeric" maxlength="4" aria-label="Year" autocomplete="off">
+            <button type="button" class="btn year-era" id="yearEra" aria-label="Switch between BC and AD">AD</button>
+            <button type="button" class="btn year-step" data-step="1" aria-label="1 year later">+1</button>
+            <button type="button" class="btn year-step" data-step="10" aria-label="10 years later">+10</button>
+          </div>
+          <input type="range" id="yearRange" class="year-range" min="0" max="1000" step="1" aria-label="Year slider">
+          <div class="year-ticks" aria-hidden="true"><span style="left:0">3500 BC</span><span style="left:25%">AD 500</span><span style="left:42%">1500</span><span style="left:70%">1900</span><span style="left:100%">2026</span></div>
+          <button type="submit" class="btn primary year-go" id="yearGo">Lock in this year</button>
+        </form>
+        <div class="guess-status" id="yearStatus" hidden></div>
+      </footer>
+
+      <!-- who lived here? the answer -->
+      <section class="card sheet person-sheet" id="personSheet" hidden aria-live="polite"></section>
+
+      <!-- verdict after each pick (answers stay hidden until the run is over) -->
+      <section class="card sheet" id="sheet" hidden aria-live="polite">
+        <div class="sheet-head">
+          <span class="chip" id="verdictChip"></span>
+          <strong class="points" id="verdictPoints"></strong>
+        </div>
+        <p class="verdict-title" id="verdictTitle"></p>
+        <p class="verdict-why" id="verdictWhy"></p>
+        <div class="sheet-actions" id="sheetActions"></div>
+      </section>
+
+      <!-- review: every answer on the map -->
+      <section class="card sheet review" id="review" hidden aria-live="polite">
+        <div class="review-nav">
+          <button class="icon-btn" id="revPrev" aria-label="Previous prompt">‹</button>
+          <span id="revCount"></span>
+          <button class="icon-btn" id="revNext" aria-label="Next prompt">›</button>
+          <span class="spacer"></span>
+          <div class="review-actions" id="revActions"></div>
+        </div>
+        <p class="review-prompt" id="revPrompt"></p>
+        <div class="review-pick" id="revPick"></div>
+        <div class="legend" id="revLegend"></div>
+        <p class="hint">Tap any country, on the map or below, to see why.</p>
+        <div class="answer-chips" id="revAnswers"></div>
+        <button class="link-btn" id="revTopic" hidden></button>
+      </section>
+
+      <!-- multiplayer: live scoreboard during a round -->
+      <section class="card mp-board" id="mpBoard" hidden aria-live="polite"></section>
+
+      <!-- learn more about a country or topic -->
+      <aside class="card detail" id="detail" hidden aria-live="polite">
+        <button class="icon-btn detail-close" id="detailClose" aria-label="Close">×</button>
+        <div id="detailBody"></div>
+      </aside>
+    </main>
+
+    <!-- Home -->
+    <section class="page" id="home">
+      <div class="page-inner">
+        <div class="mode-grid">
+          <button class="tile tile-daily" id="playDaily">
+            <svg class="art" viewBox="0 0 200 140" aria-hidden="true">
+              <g transform="translate(152 34)">
+                <circle r="15" fill="url(#stipw)" stroke="none"/><circle r="15"/>
+                <path d="M0-21v-8M0 21v8M-21 0h-8M21 0h8M-15-15l-5-5M15 15l5 5M-15 15l-5 5M15-15l5-5"/>
+                <path d="M-7-3q2.5-3 5 0M2-3q2.5-3 5 0M-5 6q5 4 10 0"/>
+              </g>
+              <path d="M104 26q4-4 8 0q4-4 8 0M86 42q3-3 6 0q3-3 6 0"/>
+              <path d="M0 116q36-24 74-10t66-8 60 6"/>
+              <path d="M0 132q52-16 104-6t96-4" stroke-dasharray="2 5"/>
+              <path d="M40 106V66h12v40M80 106V58h12v48"/>
+              <path d="M37 66l9-18 9 18z" fill="url(#stipw)"/><path d="M77 58l9-20 9 20z" fill="url(#stipw)"/>
+              <path d="M46 48v-8l8 3-8 3M86 38v-9l9 3-9 3"/>
+              <path d="M52 106V76h4v-4h4v4h4v-4h4v4h4v-4h4v4h4v30"/>
+              <path d="M60 106V95a5 5 0 0 1 10 0v11"/>
+              <path d="M45 76v5M85 70v5M85 84v5M45 90v5"/>
+              <path d="M65 106c-6 8 14 10 6 18s-20 6-16 16" stroke-dasharray="3 4"/>
+              <path d="M126 70l2 4 4 1-3 3 1 4-4-2-4 2 1-4-3-3 4-1zM20 30l1.5 3 3 .5-2 2 .5 3-3-1.5-3 1.5.5-3-2-2 3-.5z"/>
+            </svg>
+            <span class="tile-eyebrow">Daily <span id="dailyNum"></span></span>
+            <span class="tile-name">Today's Avdle</span>
+            <span class="tile-desc" id="dailyDesc">5 countries, 3 people and 3 dates. Same for everyone, new every day.</span>
+            <span class="tile-go">Play →</span>
+          </button>
+          <button class="tile tile-people" id="playPeople">
+            <svg class="art" viewBox="0 0 200 140" aria-hidden="true">
+              <ellipse cx="100" cy="62" rx="40" ry="48" stroke-dasharray="1.5 4"/>
+              <ellipse cx="100" cy="62" rx="33" ry="41"/>
+              <path d="M110 34c-12-6-27 1-28 15-1 6 3 9 0 13l-5 6 5 2-1 5 3 2-1 4c2 4 8 4 12 3l2 12h18l-2-13c8-6 11-15 9-25-2-10-6-18-12-24z" fill="url(#stipw)"/>
+              <path d="M110 34c-12-6-27 1-28 15-1 6 3 9 0 13l-5 6 5 2-1 5 3 2-1 4c2 4 8 4 12 3l2 12h18l-2-13c8-6 11-15 9-25-2-10-6-18-12-24z"/>
+              <path d="M60 106h80v16H60z" fill="currentColor" fill-opacity=".14"/><path d="M60 106h80v16H60zM60 108l-14 3 7 6-7 6 14-3M140 108l14 3-7 6 7 6-14-3"/>
+              <path d="M74 114h52" stroke-dasharray="4 3"/>
+              <path d="M62 96q-14-12-12-36M58 84q-7-1-8-8 7 1 8 8zM53 72q-7-2-6-9 6 2 6 9zM138 96q14-12 12-36M142 84q7-1 8-8-7 1-8 8zM147 72q7-2 6-9-6 2-6 9z"/>
+              <path d="M28 34l3 7 7 1-5 5 1 7-6-3-6 3 1-7-5-5 7-1z"/>
+              <path d="M172 26v22M165 33h14"/>
+            </svg>
+            <span class="tile-eyebrow">3,000+ famous people</span>
+            <span class="tile-name">Who lived here?</span>
+            <span class="tile-desc">A birthplace and a deathplace on the map. Type their name.</span>
+            <span class="tile-go">Play →</span>
+          </button>
+          <button class="tile tile-warpath" id="playWarpath" data-warpath>
+            <span class="wp-tile-dots" aria-hidden="true"></span>
+            <svg class="art" viewBox="0 0 200 140" aria-hidden="true">
+              <path d="M38 22a11 11 0 1 0 8 18 9 9 0 1 1-8-18z" fill="url(#stipw)"/>
+              <path d="M0 140l28-34 20 8 26-24 34 20 26-12 66 42z" fill="url(#stipw)" stroke="none" opacity=".5"/>
+              <path d="M0 140l28-34 20 8 26-24 34 20 26-12 66 42"/>
+              <circle cx="56" cy="60" r="6"/><path d="M53 54l3-8 3 8M50 60h12"/>
+              <path d="M49 68h14l3 22H46z" fill="url(#stipw)"/><path d="M49 68h14l3 22H46z"/>
+              <path d="M50 90l-3 12M62 90l3 12"/>
+              <path d="M64 72l20-30M76 50l7 5" stroke-width="2.4"/>
+              <path d="M42 72q-7 11 0 22 7-4 7-11z" fill="currentColor" fill-opacity=".25"/><path d="M42 72q-7 11 0 22 7-4 7-11z"/>
+              <path d="M118 96c10-18 34-22 50-14 10 5 14 16 26 18"/>
+              <path d="M118 96c-7-2-13-9-10-15 4 0 10 2 14 6"/><path d="M108 81l-8-3 7 6M112 84l-2 2"/>
+              <path d="M140 82l-8-34 16 14 6-20 9 24 13-11-5 30z" fill="url(#stipw)"/><path d="M140 82l-8-34 16 14 6-20 9 24 13-11-5 30"/>
+              <path d="M142 100l-4 12M162 100l3 12M150 84l3-4 3 4 3-4 3 4"/>
+              <path d="M100 78q-8-5-14 0t-12 0M99 85q-9 1-15 6M101 72q-6-6-12-5"/>
+              <path d="M18 108l3 4M14 116l4 2"/>
+            </svg>
+            <span class="tile-eyebrow">New · guess the year · with friends too</span>
+            <span class="tile-name">Warpath</span>
+            <span class="tile-desc">Pick an empire and march to war. Every moment in history is a fight: guess its year, slay the enemy, and build a wonder.</span>
+            <span class="tile-go">March →</span>
+          </button>
+          <button class="tile tile-infinite" id="playInfinite">
+            <svg class="art" viewBox="0 0 200 140" aria-hidden="true">
+              <g transform="translate(30 30)"><circle r="13"/><path d="M0-19L3-3 19 0 3 3 0 19-3 3-19 0-3-3z" fill="url(#stipw)"/><path d="M0-19L3-3 19 0 3 3 0 19-3 3-19 0-3-3z"/></g>
+              <path d="M90 98V26M116 98V36"/>
+              <path d="M76 34c9 9 9 20 0 28h28c-9-8-9-19 0-28z" fill="currentColor" fill-opacity=".18"/><path d="M76 34c9 9 9 20 0 28h28c-9-8-9-19 0-28z"/>
+              <path d="M104 44c8 8 8 17 0 24h24c-8-7-8-16 0-24z" fill="currentColor" fill-opacity=".18"/><path d="M104 44c8 8 8 17 0 24h24c-8-7-8-16 0-24z"/>
+              <path d="M90 26l10 4-10 4M116 36l9 3-9 3"/>
+              <path d="M58 98h86l-14 16H72z" fill="url(#stipw)"/><path d="M58 98h86l-14 16H72zM132 98V88h12l-2 10"/>
+              <path d="M66 104h70" stroke-dasharray="2 4"/>
+              <path d="M0 120q10-8 20 0t20 0 20 0 20 0 20 0 20 0 20 0 20 0 20 0 20 0"/>
+              <path d="M10 132q10-8 20 0t20 0 20 0 20 0 20 0 20 0 20 0 20 0 20 0"/>
+              <path d="M150 120c3-14 15-14 18 0M164 120c3-12 13-12 16 0"/><path d="M178 120c1-10 9-15 14-9l-4 4"/><circle cx="188" cy="112" r="1" fill="currentColor"/>
+              <path d="M150 30c6-8 14-8 18 0s12 8 18 0c-6-8-14-8-18 0s-12 8-18 0z"/>
+            </svg>
+            <span class="tile-eyebrow">∞ Infinite</span>
+            <span class="tile-name">Infinite mode</span>
+            <span class="tile-desc">It never ends. Map prompts or Warpath, your pick.</span>
+            <span class="tile-go">Play →</span>
+          </button>
+          <button class="tile tile-friends" id="playFriends">
+            <svg class="art" viewBox="0 0 200 140" aria-hidden="true">
+              <path d="M150 124V72M150 88l-12-10M150 82l14-12"/>
+              <path d="M118 72c-10-18 10-34 30-28 14-14 42 0 34 18 12 10 0 28-16 24-10 10-32 8-48-14z" fill="url(#stipw)"/><path d="M118 72c-10-18 10-34 30-28 14-14 42 0 34 18 12 10 0 28-16 24-10 10-32 8-48-14z"/>
+              <path d="M104 124V60M104 66h26l6 5-6 5h-26zM104 84H80l-6 5 6 5h24z"/>
+              <path d="M40 80c0-10 13-10 13 0v6M38 86l-6 36h28l-6-36z" fill="currentColor" fill-opacity=".18"/><path d="M40 80c0-10 13-10 13 0v6M38 86l-6 36h28l-6-36z"/>
+              <path d="M30 74v50M62 96v6h6v-6zM65 90v6"/>
+              <path d="M70 92c0-9 12-9 12 0v5M68 97l-5 25h26l-5-25z"/>
+              <path d="M0 128q60-10 120 0t80-2" stroke-dasharray="3 5"/>
+              <path d="M20 26l1.5 3 3 .5-2 2 .5 3-3-1.5-3 1.5.5-3-2-2 3-.5zM78 18l1.5 3 3 .5-2 2 .5 3-3-1.5-3 1.5.5-3-2-2 3-.5z"/>
+            </svg>
+            <span class="tile-eyebrow">Versus</span>
+            <span class="tile-name">Play with friends</span>
+            <span class="tile-desc">Make a room, pick the game and the rules, share the code.</span>
+            <span class="tile-go">Play →</span>
+          </button>
+        </div>
+
+        <!-- the how-to and stats live in the animated "how to play" screens now; these keep the data -->
+        <div hidden>
+          <p class="topics" id="topics"></p>
+          <div class="stats-row" id="statsRow"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Animated "how to play" for each game -->
+    <section class="overlay howto" id="howto" hidden aria-live="polite">
+      <div class="card panel howto-panel" id="howtoPanel"></div>
+    </section>
+
+    <!-- Results -->
+    <section class="overlay" id="camp" hidden>
+      <div class="card panel camp-panel">
+        <svg class="art panel-art" viewBox="0 0 120 90" aria-hidden="true">
+          <path d="M10 80l35-50 17 22 13-14 35 42z"/><path d="M45 30L35 44l14 6z" fill="url(#stip)"/><path d="M75 38l-6 14 12 2z" fill="url(#stip)"/>
+          <path d="M45 30V10l16 5-16 5"/><path d="M96 18q4-5 8 0q4-5 8 0"/>
+        </svg>
+        <p class="eyebrow" id="campEyebrow"></p>
+        <h2 class="title" id="campScore"></h2>
+        <p class="emoji-row" id="campEmoji" aria-hidden="true"></p>
+        <div class="camp-actions" id="campActions"></div>
+        <ol class="answer-list" id="campList"></ol>
+        <p class="countdown" id="countdown"></p>
+      </div>
+    </section>
+
+    <!-- Multiplayer lobby -->
+    <section class="overlay" id="lobby" hidden>
+      <div class="card panel lobby-panel">
+        <svg class="art panel-art" viewBox="0 0 120 90" aria-hidden="true">
+          <path d="M50 80l6-50h8l6 50z"/><path d="M53 62h14M54 48h12"/><path d="M54 30v-8h12v8M52 22l8-7 8 7"/>
+          <path d="M66 24l38-10M66 28l38 10" stroke-dasharray="3 4"/><path d="M54 24L16 14M54 28L16 38" stroke-dasharray="3 4"/>
+          <path d="M40 80q20-8 40 0" fill="url(#stip)"/><path d="M6 86q8-5 16 0t16 0t16 0t16 0t16 0t16 0t16 0"/>
+        </svg>
+        <p class="eyebrow">Play with friends</p>
+        <div id="lobbyJoin">
+          <h2 class="title small-title">Head to head</h2>
+          <p class="lede">Pick what to play: countries, famous people, dates, or a random mix. Everyone gets the same questions, and the standings come at the end.</p>
+          <label class="field"><span>Your name</span><input id="mpName" maxlength="20" autocomplete="nickname" placeholder="Explorer"></label>
+          <div class="room-settings" id="createSettings"></div>
+          <button class="btn primary wide" id="mpCreate">Create a room</button>
+          <div class="or"><span>or join one</span></div>
+          <div class="join-row">
+            <input id="mpCode" maxlength="4" placeholder="CODE" autocapitalize="characters" autocomplete="off" spellcheck="false" aria-label="Room code">
+            <button class="btn" id="mpJoin">Join</button>
+          </div>
+          <button class="link-btn center-btn" id="mpWarpath" type="button">⚔ Or open a Warpath war room, with the dot-matrix battles →</button>
+          <p class="small" id="mpOffline" hidden>Multiplayer needs the Avdle server. Run <code>npm start</code> and open the page from it.</p>
+        </div>
+        <div id="lobbyRoom" hidden>
+          <p class="small center">Room code</p>
+          <h2 class="title room-code" id="mpRoomCode"></h2>
+          <div class="camp-actions">
+            <button class="btn" id="mpCopy">Copy invite link</button>
+            <button class="btn" id="mpLeave">Leave room</button>
+          </div>
+          <div class="room-settings" id="roomSettings"></div>
+          <ul class="mp-players" id="mpPlayers"></ul>
+          <button class="btn primary wide" id="mpStart">Start game</button>
+          <p class="small center" id="mpWaitHost">Waiting for the host to start…</p>
+        </div>
+        <p class="small center" id="mpStatus"></p>
+        <button class="link-btn center-btn" id="mpBack">← Back to home</button>
+      </div>
+    </section>
+
+    <!-- Multiplayer final standings -->
+    <section class="overlay" id="mpOver" hidden>
+      <div class="card panel camp-panel">
+        <svg class="art panel-art" viewBox="0 0 120 90" aria-hidden="true">
+          <path d="M42 18h36v14c0 16-8 26-18 26S42 48 42 32z" fill="url(#stip)"/><path d="M42 22H30c0 14 8 18 14 18M78 22h12c0 14-8 18-14 18"/>
+          <path d="M60 58v12M46 80h28l-4-10H50z"/><path d="M20 14l2 5 5 1-4 3 1 5-4-3-4 3 1-5-4-3 5-1zM100 50l2 4 4 1-3 3 1 4-4-2-4 2 1-4-3-3 4-1z"/>
+        </svg>
+        <p class="eyebrow" id="mpOverEyebrow">Final standings</p>
+        <h2 class="title small-title" id="mpOverWinner"></h2>
+        <ol class="mp-standings" id="mpStandings"></ol>
+        <div class="camp-actions" id="mpOverActions"></div>
+        <ol class="answer-list" id="mpOverRounds"></ol>
+      </div>
+    </section>
+
+    <!-- Navigation -->
+    <dialog id="menuDlg" class="menu-dlg" aria-label="Menu">
+      <nav class="menu">
+        <div class="menu-head">
+          <span class="brand-mark"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 30C14 24 6 19 6 12a10 10 0 0 1 20 0c0 7-8 12-10 18z"/><circle cx="16" cy="12" r="4"/></svg>avdle</span>
+          <button class="icon-btn" data-go="close" aria-label="Close menu">×</button>
+        </div>
+        <button class="menu-item" data-go="home"><i class="m-ico m0">⌂</i>Home</button>
+        <button class="menu-item" data-go="daily"><i class="m-ico m1">◎</i>Daily</button>
+        <button class="menu-item" data-go="people"><i class="m-ico m3">★</i>Who lived here?</button>
+        <button class="menu-item" data-go="infinite"><i class="m-ico m2">∞</i>Infinite mode</button>
+        <button class="menu-item" data-go="friends"><i class="m-ico m4">⚑</i>Play with friends</button>
+        <button class="menu-item" data-warpath><i class="m-ico m6">⚔</i>Warpath (guess the year)</button>
+        <div class="menu-sep"></div>
+        <button class="menu-item" data-go="help"><i class="m-ico">?</i>How to play</button>
+        <button class="menu-item" data-go="settings"><i class="m-ico">⚙</i>Settings</button>
+      </nav>
+    </dialog>
+
+    <dialog id="chooseDlg" aria-labelledby="chooseTitle">
+      <form method="dialog" class="card dlg choose-dlg">
+        <h3 id="chooseTitle"></h3>
+        <div class="choose-list" id="chooseList"></div>
+        <div class="dlg-actions"><button class="btn" value="cancel">Cancel</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="confirmDlg">
+      <form method="dialog" class="card dlg">
+        <h3 id="confirmTitle">Leave this game?</h3>
+        <p id="confirmText"></p>
+        <div class="dlg-actions">
+          <button class="btn" value="stay">Keep playing</button>
+          <button class="btn primary" value="leave" id="confirmOk">Leave</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="helpDlg">
+      <form method="dialog" class="card dlg">
+        <h3>How to play</h3>
+        <ol class="howto">
+          <li>Read the prompt, e.g. <em>"Pin a country the Danube flows through."</em></li>
+          <li>Tap the map to place your pin. Tap again to move it. Drag to pan, pinch or scroll to zoom.</li>
+          <li>Press <strong>Drop pin</strong>. One answer per prompt.</li>
+          <li>After five prompts, review every answer on the map and learn why each country counts.</li>
+        </ol>
+        <p>Every right answer scores, but the less charted your answer, the more it's worth:</p>
+        <ul class="tier-table" id="tierTable"></ul>
+        <p><strong>Who lived here?</strong> Two pins show where a famous person was born (★) and died (✝), with the dates. Type their name; the surname is enough, and small typos are fine. A hint halves the points; less famous people score more.</p>
+        <p class="small">Territories count for the country they belong to (Greenland is Denmark, Guam is the United States). Tiny countries have a dot so you can tap them.</p>
+        <p class="small">Use ☰ for the menu and Exit to leave any screen. Keyboard: arrows pan, + / − zoom, Enter drops the pin or moves on, Esc closes panels.</p>
+        <button class="btn primary" value="close">Got it</button>
+      </form>
+    </dialog>
+
+    <dialog id="settingsDlg">
+      <form method="dialog" class="card dlg">
+        <h3>Settings</h3>
+        <label class="toggle"><input type="checkbox" id="optNames"> <span>Show the country name for your pin</span></label>
+        <label class="toggle"><input type="checkbox" id="optBorders"> <span>Show borders</span></label>
+        <label class="toggle"><input type="checkbox" id="optTimer"> <span>60-second clock per prompt (solo games)</span></label>
+        <label class="toggle"><input type="checkbox" id="optNight"> <span>Night chart (dark theme)</span></label>
+        <p class="small">Turn off names and borders for a harder game. With the clock on, your pin drops itself when time runs out. Rooms set their own clock.</p>
+        <button class="btn primary" value="close">Done</button>
+      </form>
+    </dialog>
+
+    <div class="toast" id="toast" role="status"></div>
+
+    <!-- Warpath: guess the year (its own screen, its own war rooms) -->
+    <section class="wp" id="warpath" hidden aria-label="Warpath, guess the year">
+      <header class="wp-top">
+        <span class="wp-brand">WARPATH</span>
+        <span class="wp-meta" id="wpMeta"></span>
+        <span class="wp-score" id="wpScore"></span>
+        <button class="wp-x wp-help" id="wpHelp" type="button" title="How Warpath works" aria-label="How Warpath works">?</button>
+        <button class="wp-x" id="wpExit" type="button" title="Back to Avdle">✕ <span>Exit</span></button>
+      </header>
+      <div class="wp-stage"><canvas id="wpCanvas" aria-label="A dot-matrix gladiator on a map of the Mauryan Empire" role="img"></canvas></div>
+      <div class="wp-panel" id="wpPanel" aria-live="polite"></div>
+    </section>
+  </div>
+
+  <script src="vendor/d3.min.js?v=6"></script>
+  <script src="vendor/topojson-client.min.js?v=6"></script>
+  <script src="data/countries.js?v=6"></script>
+  <script src="data/facts.js?v=6"></script>
+  <script src="data/world.js?v=6"></script>
+  <script src="js/prompts.js?v=6"></script>
+  <script src="js/people.js?v=7"></script>
+  <script src="data/events.js?v=2"></script>
+  <script src="js/warpath.js?v=3"></script>
+  <script src="js/app.js?v=12"></script>
+  <script src="js/warpath-empires.js?v=2"></script>
+  <script src="js/warpath-ui.js?v=9"></script>
+</body>
+</html>

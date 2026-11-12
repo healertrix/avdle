@@ -1,0 +1,15 @@
+{
+  "name": "longshot",
+  "version": "1.0.0",
+  "description": "A geography game drawn as an antique explorer's chart. Each prompt asks you to pin a country (\"Pin a country that borders Germany\"). Any correct answer scores, and the less obvious your answer, the more it's worth:",
+  "scripts": {
+    "start": "node server/server.js",
+    "test": "node tools/check-prompts.mjs",
+    "build": "node tools/build-data.mjs"
+  },
+  "type": "commonjs",
+  "dependencies": {
+    "ws": "8.22.0"
+  },
+  "private": true
+}
