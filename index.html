@@ -7,8 +7,8 @@
   <meta name="description" content="A geography game: pin a country that fits the prompt, or name a famous person from where they were born and died. The less obvious your answer, the more it scores.">
   <meta name="theme-color" content="#ffffff">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 30C14 24 6 19 6 12a10 10 0 0 1 20 0c0 7-8 12-10 18z' fill='%232a4bd7'/%3E%3Ccircle cx='16' cy='12' r='4' fill='%23fff'/%3E%3C/svg%3E">
-  <link rel="stylesheet" href="css/style.css?v=13">
-  <link rel="stylesheet" href="css/warpath.css?v=7">
+  <link rel="stylesheet" href="css/style.css?v=14">
+  <link rel="stylesheet" href="css/warpath.css?v=8">
 </head>
 <body>
   <!-- shared textures for the line-art illustrations -->
@@ -87,13 +87,20 @@
       <!-- dates: guess the year -->
       <footer class="card dock year-dock" id="yearDock" hidden>
         <form class="year-form" id="yearForm" autocomplete="off">
+          <div class="year-top">
+            <label class="year-readout"><input id="yearInput" inputmode="numeric" maxlength="4" aria-label="Year" autocomplete="off"><span id="yearEraShow">AD</span></label>
+            <div class="year-eraseg" role="radiogroup" aria-label="Before or after year 1">
+              <button type="button" class="year-erabtn" id="yearBC" role="radio"><b>BC</b><small>before year 1</small></button>
+              <button type="button" class="year-erabtn" id="yearAD" role="radio"><b>AD</b><small>year 1 onward</small></button>
+            </div>
+          </div>
           <div class="year-row">
+            <button type="button" class="btn year-step" data-step="-100" aria-label="100 years earlier">−100</button>
             <button type="button" class="btn year-step" data-step="-10" aria-label="10 years earlier">−10</button>
             <button type="button" class="btn year-step" data-step="-1" aria-label="1 year earlier">−1</button>
-            <input id="yearInput" inputmode="numeric" maxlength="4" aria-label="Year" autocomplete="off">
-            <button type="button" class="btn year-era" id="yearEra" aria-label="Switch between BC and AD">AD</button>
             <button type="button" class="btn year-step" data-step="1" aria-label="1 year later">+1</button>
             <button type="button" class="btn year-step" data-step="10" aria-label="10 years later">+10</button>
+            <button type="button" class="btn year-step" data-step="100" aria-label="100 years later">+100</button>
           </div>
           <input type="range" id="yearRange" class="year-range" min="0" max="1000" step="1" aria-label="Year slider">
           <div class="year-ticks" aria-hidden="true"><span style="left:0">3500 BC</span><span style="left:25%">AD 500</span><span style="left:42%">1500</span><span style="left:70%">1900</span><span style="left:100%">2026</span></div>
@@ -424,9 +431,9 @@
   <script src="js/prompts.js?v=6"></script>
   <script src="js/people.js?v=7"></script>
   <script src="data/events.js?v=2"></script>
-  <script src="js/warpath.js?v=3"></script>
-  <script src="js/app.js?v=12"></script>
+  <script src="js/warpath.js?v=4"></script>
+  <script src="js/app.js?v=13"></script>
   <script src="js/warpath-empires.js?v=2"></script>
-  <script src="js/warpath-ui.js?v=10"></script>
+  <script src="js/warpath-ui.js?v=11"></script>
 </body>
 </html>

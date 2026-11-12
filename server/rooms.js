@@ -315,6 +315,7 @@ function connect(ws) {
           me.empire = wanted && !taken.has(wanted) ? wanted : W.EMPIRES.find((e) => !taken.has(e)) || W.EMPIRES[0];
         }
         room.players.set(me.id, me);
+        if (m.t === "create") room.creator = me.id; // whoever made the room gets it back when they return
         const hostHere = room.players.get(room.host);
         if (!hostHere || !hostHere.connected) room.host = me.id;
         room.emptySince = null;
@@ -331,6 +332,7 @@ function connect(ws) {
         me = pl;
         me.ws = ws;
         me.connected = true;
+        if (room.creator === me.id) room.host = me.id;
         room.emptySince = null;
         send(ws, { t: "joined", code: room.code, id: me.id, token: me.token });
         return broadcast(room);

@@ -19,10 +19,18 @@
 
   // How close counts as close depends on how long ago it was: within 3 years of the iPhone is
   // as hard as within about 25 years of the pyramids.
-  function bands(y) {
+  // Scoring. The exact year is worth 1,000. Otherwise points shrink smoothly the further off you are,
+  // and you still get half the points at the "half-points distance", which grows with how long ago it was:
+  // about 3 years for 2007, 41 years for 1492, 170 years for 490 BC. So being near on an old moment pays well.
+  function halfAt(y) {
     const age = Math.max(1, NOW - ast(y));
-    const close = Math.max(1, Math.round(0.55 * Math.sqrt(age)));
-    return { close, near: Math.max(close + 1, Math.round(close * 2.5)), rough: Math.max(close + 2, Math.round(close * 6)) };
+    return Math.max(3, Math.round(1 + 0.1 * Math.pow(age, 0.95)));
+  }
+  const share = (off, h) => (off === 0 ? 1 : 1 / (1 + (off / h) ** 2));
+  // how many years off still counts as close / near / rough (for the labels and the fights)
+  function bands(y) {
+    const h = halfAt(y);
+    return { half: h, close: Math.max(1, Math.round(h * 0.65)), near: Math.max(2, Math.round(h * 1.1)), rough: Math.max(3, Math.round(h * 2)) };
   }
 
   const TIERS = [
@@ -45,9 +53,13 @@
     const mult = multOf(ev);
     if (!isYear(guess)) return { tier: 5, points: 0, off: null, mult, max: maxPoints(ev), monument: false };
     const off = yearsOff(guess, ev.y);
-    const b = bands(ev.y);
-    const tier = off === 0 ? 0 : off <= b.close ? 1 : off <= b.near ? 2 : off <= b.rough ? 3 : 4;
-    return { tier, points: Math.round(TIERS[tier].points * mult), off, mult, max: maxPoints(ev), monument: monumentHit(tier, ev) };
+    const h = halfAt(ev.y);
+    const f = share(off, h);
+    const tier = off === 0 ? 0 : f >= 0.7 ? 1 : f >= 0.45 ? 2 : f >= 0.2 ? 3 : 4;
+    // exact = 1,000; one year off and beyond = up to 900, shrinking smoothly; never below 20 for trying
+    const base = off === 0 ? 1000 : Math.max(20, Math.round((f * 900) / 10) * 10);
+    const points = Math.round((base * mult) / 10) * 10;
+    return { tier, base, points, off, mult, half: h, max: maxPoints(ev), monument: monumentHit(tier, ev) };
   }
 
   // Difficulty 1 (recruit) .. 5 (legend): mostly moments of that fame, a few either side.
@@ -105,7 +117,7 @@
   // Campaigns (the empire you march for). The art and maps are in js/warpath-empires.js.
   const EMPIRES = ["maurya", "gupta", "chola", "mughal", "maratha", "macedon", "persia", "rome", "mongol", "ottoman", "japan", "napoleon", "inca"];
 
-  const api = { EMPIRES, MULT, multOf, maxPoints, monumentHit, LIST, NOW, MIN_YEAR, MAX_YEAR, TIERS, LEVELS, LEVEL_NAMES, CATS, ast, fromAst, yearsOff, yearText, isYear, bands, judge, draw, clue, factText };
+  const api = { halfAt, EMPIRES, MULT, multOf, maxPoints, monumentHit, LIST, NOW, MIN_YEAR, MAX_YEAR, TIERS, LEVELS, LEVEL_NAMES, CATS, ast, fromAst, yearsOff, yearText, isYear, bands, judge, draw, clue, factText };
   root.Warpath = api;
   if (typeof module !== "undefined") module.exports = api;
 })(typeof window !== "undefined" ? window : globalThis);

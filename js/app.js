@@ -1554,7 +1554,15 @@
             mpWaiting();
           }
         } else if (S.phase === "guess") submitGuess($("#guessInput").value);
-        else if (S.phase === "year") $("#yearForm").requestSubmit();
+        else if (S.phase === "year") {
+          // time's up: send your year only if you set one, otherwise it's no answer
+          if (S.yearTouched) $("#yearForm").requestSubmit();
+          else if (S.onYear) {
+            const f = S.onYear;
+            S.onYear = null;
+            f(null);
+          }
+        }
       }
       if (ms <= 0) stopTimer();
     };
@@ -2302,19 +2310,42 @@
   const yClamp = (a) => Math.max(WP().ast(WP().MIN_YEAR), Math.min(WP().ast(WP().MAX_YEAR), a));
   function yearRender(fromInput) {
     const y = WP().fromAst(S.yearAst);
+    const bc = y < 0;
     if (!fromInput) $("#yearInput").value = String(Math.abs(y));
-    $("#yearEra").textContent = y < 0 ? "BC" : "AD";
-    $("#yearEra").classList.toggle("bc", y < 0);
+    $("#yearEraShow").textContent = bc ? "BC" : "AD";
+    $("#yearEraShow").classList.toggle("bc", bc);
+    $("#yearBC").classList.toggle("on", bc);
+    $("#yearAD").classList.toggle("on", !bc);
+    $("#yearBC").setAttribute("aria-checked", String(bc));
+    $("#yearAD").setAttribute("aria-checked", String(!bc));
     $("#yearRange").value = String(Math.round(yAstToPos(S.yearAst)));
+  }
+  // nothing is sent until you've set a year yourself
+  function yearTouch() {
+    if (S.yearTouched) return;
+    S.yearTouched = true;
+    $("#yearGo").disabled = false;
+    $("#yearGo").textContent = "Lock in this year";
   }
   const yearSet = (a) => {
     S.yearAst = yClamp(a);
+    yearTouch();
     yearRender();
   };
   for (const b of document.querySelectorAll(".year-step")) b.addEventListener("click", () => yearSet(S.yearAst + Number(b.dataset.step)));
-  $("#yearEra").addEventListener("click", () => yearSet(WP().ast(-WP().fromAst(S.yearAst) || 1)));
+  $("#yearBC").addEventListener("click", () => {
+    const y = WP().fromAst(S.yearAst);
+    if (y > 0) yearSet(WP().ast(-y));
+    else yearTouch();
+  });
+  $("#yearAD").addEventListener("click", () => {
+    const y = WP().fromAst(S.yearAst);
+    if (y < 0) yearSet(WP().ast(-y));
+    else yearTouch();
+  });
   $("#yearRange").addEventListener("input", () => {
     S.yearAst = yClamp(yPosToAst(Number($("#yearRange").value)));
+    yearTouch();
     yearRender();
   });
   $("#yearInput").addEventListener("input", () => {
@@ -2322,6 +2353,7 @@
     inp.value = inp.value.replace(/\D/g, "").slice(0, 4);
     const v = Number(inp.value);
     if (!v) return;
+    yearTouch();
     const bc = WP().fromAst(S.yearAst) < 0;
     S.yearAst = yClamp(WP().ast(bc ? -v : v));
     yearRender(true);
@@ -2329,7 +2361,7 @@
   $("#yearInput").addEventListener("focus", () => $("#yearInput").select());
   $("#yearForm").addEventListener("submit", (e) => {
     e.preventDefault();
-    if (S.phase !== "year" || !S.onYear) return;
+    if (S.phase !== "year" || !S.onYear || !S.yearTouched) return;
     const f = S.onYear;
     S.onYear = null;
     f(WP().fromAst(S.yearAst));
@@ -2356,6 +2388,9 @@
     $("#yearDock").hidden = false;
     $("#yearStatus").hidden = true;
     for (const n of $("#yearForm").querySelectorAll("input, button")) n.disabled = false;
+    S.yearTouched = false;
+    $("#yearGo").disabled = true;
+    $("#yearGo").textContent = "Set a year first ↑";
     S.yearAst = 1500;
     yearRender();
     const where = dotWorld(true, clue);
@@ -2376,7 +2411,13 @@
     chip.textContent = W2.TIERS[res.tier].what;
     $("#verdictPoints").textContent = `+${fmt(res.points)}`;
     $("#verdictTitle").textContent = `It happened in ${W2.yearText(ev.y)}`;
-    const off = res.off == null ? "" : res.off === 0 ? " Spot on!" : ` That's ${fmt(res.off)} year${res.off === 1 ? "" : "s"} off.`;
+    const half = res.half || W2.halfAt(ev.y);
+    const off =
+      res.off == null
+        ? ""
+        : res.off === 0
+          ? " Spot on: 1,000."
+          : ` That's ${fmt(res.off)} year${res.off === 1 ? "" : "s"} off: ${fmt(res.base != null ? res.base : res.points)} of 1,000 (half points at ${fmt(half)} years off)${res.mult > 1 ? `, ×${res.mult} for a harder moment` : ""}.`;
     const fact = W2.factText(ev);
     $("#verdictWhy").textContent = `${ev.text}. You said ${res.guess != null ? W2.yearText(res.guess) : "nothing"}.${off}${fact ? " " + fact : ""}`;
     const actions = $("#sheetActions");

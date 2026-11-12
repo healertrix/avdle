@@ -221,3 +221,33 @@ body.wp-open { overflow: hidden; }
   .wp-rt-row { grid-template-columns: 1fr auto auto; }
   .wp-rt-emp { display: none; }
 }
+
+/* ---------- the year controls (shared look) ---------- */
+.wp-range-big { -webkit-appearance: none; appearance: none; width: 100%; height: 40px; background: transparent; margin: 0; cursor: pointer; touch-action: pan-y; }
+.wp-range-big::-webkit-slider-runnable-track { height: 12px; border-radius: 999px; background: linear-gradient(90deg, #6e4a12 0%, #8a5a2a 25%, #a8701c 42%, #c8901c 70%, #ffcf5a 100%); }
+.wp-range-big::-moz-range-track { height: 12px; border-radius: 999px; background: linear-gradient(90deg, #6e4a12 0%, #8a5a2a 25%, #a8701c 42%, #c8901c 70%, #ffcf5a 100%); }
+.wp-range-big::-webkit-slider-thumb { -webkit-appearance: none; width: 30px; height: 30px; margin-top: -9px; border-radius: 50%; background: #07090d; border: 4px solid #ffcf5a; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35); }
+.wp-range-big::-moz-range-thumb { width: 24px; height: 24px; border-radius: 50%; background: #07090d; border: 4px solid #ffcf5a; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35); }
+.wp-range-big:focus-visible { outline: 3px solid #ffcf5a; outline-offset: 4px; border-radius: 999px; }
+
+.wp-yearbox { display: flex; align-items: center; justify-content: center; gap: 14px; flex-wrap: wrap; }
+.wp-readout { display: flex; align-items: baseline; gap: 8px; padding: 4px 14px; border-radius: 14px; border: 1px solid var(--wp-edge); background: #07090d; cursor: text; }
+.wp-readout .wp-yearin { border: 0; width: 4.2ch; }
+.wp-erashow { font: 800 20px var(--wp-mono); color: var(--wp-amber); letter-spacing: 0.08em; }
+.wp-erashow.bc { color: #ff8a6a; }
+.wp-eraseg { display: inline-grid; grid-template-columns: 1fr 1fr; border: 1.5px solid var(--wp-edge); border-radius: 14px; overflow: hidden; }
+.wp-erabtn { display: grid; justify-items: center; padding: 6px 16px; border: 0; background: #0b0e14; color: var(--wp-muted); cursor: pointer; font: inherit; }
+.wp-erabtn b { font: 800 17px var(--wp-mono); color: var(--wp-ink); }
+.wp-erabtn small { font: 600 10px var(--wp-mono); }
+.wp-erabtn + .wp-erabtn { border-left: 1.5px solid var(--wp-edge); }
+.wp-erabtn.on { background: var(--wp-amber); color: #1a1205; }
+.wp-erabtn.on b { color: #1a1205; }
+.wp-steps { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+.wp-steps .wp-step { min-width: 0; }
+.wp-yearslider { height: 40px; }
+@media (max-width: 560px) {
+  .wp-yearbox { gap: 8px; }
+  .wp-erabtn { padding: 5px 12px; }
+  .wp-steps { gap: 4px; }
+  .wp-steps .wp-step { font-size: 12px; height: 38px; }
+}

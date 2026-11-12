@@ -1437,15 +1437,30 @@
     showPanel(h);
     kick();
   }
+  // how the points were worked out, in plain words
+  function scoreExplain(res, ev) {
+    if (res.guess == null) return "No answer, no points.";
+    const h = res.half || W.halfAt(ev.y);
+    const base = res.base != null ? res.base : res.points;
+    const how = res.off === 0 ? "Exact year: 1,000." : `${fmt(res.off)} year${res.off === 1 ? "" : "s"} off scores ${fmt(base)} of 1,000 (for this moment you'd still get half at ${fmt(h)} years off).`;
+    return res.mult > 1 ? `${how} ×${res.mult} for a harder moment = ${fmt(res.points)}.` : how;
+  }
   function tierLegend() {
     const ul = el("ul", "wp-tiers");
-    for (const t of W.TIERS.slice(0, 5)) {
+    const ex = (y) => `${fmt(W.halfAt(y))} yrs`;
+    for (const [dot, text, pts] of [
+      ["slain", "Exact year", "1,000"],
+      ["victory", "Close (a few years off)", "≈700–900"],
+      ["hard", "Near", "≈450"],
+      ["escaped", "Rough", "≈200–400"],
+      ["felled", "Way off", "20+"],
+    ]) {
       const li = el("li");
-      li.append(el("span", "wp-tdot t-" + t.key), el("span", null, `${t.what}: ${t.label}`), el("b", null, `${t.points}+`));
+      li.append(el("span", "wp-tdot t-" + dot), el("span", null, text), el("b", null, pts));
       ul.append(li);
     }
     const li = el("li", "wp-tnote");
-    li.append(el("span", null, `Harder moments multiply the points: ×1 for household names up to ×${W.MULT[5]} for deep cuts.`));
+    li.append(el("span", null, `Points shrink smoothly with distance. Older moments are kinder: you still get half the points at ${ex(2007)} off for 2007, ${ex(1492)} for 1492, ${ex(-490)} for 490 BC. Harder moments then multiply the points, up to ×${W.MULT[5]}.`));
     ul.append(li);
     return ul;
   }
@@ -1519,24 +1534,30 @@
     top.append(clock);
     card.append(top, el("h2", "wp-moment", ev.text));
 
-    const row = el("div", "wp-yearrow");
-    const mk = (label) => {
-      const b = el("button", "wp-step", label);
-      b.type = "button";
-      return b;
-    };
-    const minus10 = mk("−10");
-    const minus = mk("−1");
-    const plus = mk("+1");
-    const plus10 = mk("+10");
+    // the year: a big readout, a clear BC | AD switch, fine-tune buttons and a wide slider
+    const ybox = el("div", "wp-yearbox");
+    const readout = el("label", "wp-readout");
     const inp = el("input", "wp-yearin");
     inp.inputMode = "numeric";
     inp.setAttribute("aria-label", "Year");
     inp.maxLength = 4;
-    const era = el("button", "wp-era");
-    era.type = "button";
-    era.setAttribute("aria-label", "Switch BC or AD");
-    row.append(minus10, minus, inp, era, plus, plus10);
+    const eraShow = el("span", "wp-erashow");
+    readout.append(inp, eraShow);
+    const seg = el("div", "wp-eraseg");
+    seg.setAttribute("role", "radiogroup");
+    seg.setAttribute("aria-label", "Before or after year 1");
+    const mkEra = (big, small) => {
+      const eb = el("button", "wp-erabtn");
+      eb.type = "button";
+      eb.setAttribute("role", "radio");
+      eb.append(el("b", null, big), el("small", null, small));
+      seg.append(eb);
+      return eb;
+    };
+    const bcBtn = mkEra("BC", "before year 1");
+    const adBtn = mkEra("AD", "year 1 onward");
+    ybox.append(readout, seg);
+    const steps = el("div", "wp-steps");
     const range = el("input", "wp-range wp-yearslider");
     range.type = "range";
     range.min = "0";
@@ -1549,43 +1570,78 @@
       t.style.left = p / 10 + "%";
       ticks.append(t);
     }
+    G.guess = W.ast(1500);
+    G.touched = false;
+    // the Strike button wakes up once you've set a year yourself
+    const touch = () => {
+      if (G.touched) return;
+      G.touched = true;
+      card.classList.add("touched");
+      const gb = card.querySelector(".wp-strike");
+      if (gb) {
+        gb.disabled = false;
+        gb.textContent = "Strike! ⚔";
+      }
+    };
     const render = (fromInput) => {
       const y = W.fromAst(G.guess);
+      const bc = y < 0;
       if (!fromInput) inp.value = String(Math.abs(y));
-      era.textContent = y < 0 ? "BC" : "AD";
-      era.classList.toggle("bc", y < 0);
+      eraShow.textContent = bc ? "BC" : "AD";
+      eraShow.classList.toggle("bc", bc);
+      bcBtn.classList.toggle("on", bc);
+      adBtn.classList.toggle("on", !bc);
+      bcBtn.setAttribute("aria-checked", String(bc));
+      adBtn.setAttribute("aria-checked", String(!bc));
       range.value = String(Math.round(astToPos(G.guess)));
     };
-    const setAst = (a) => {
-      G.guess = clampAst(a);
+    const setAst = (v) => {
+      G.guess = clampAst(v);
+      touch();
       render();
     };
-    minus10.onclick = () => setAst(G.guess - 10);
-    minus.onclick = () => setAst(G.guess - 1);
-    plus.onclick = () => setAst(G.guess + 1);
-    plus10.onclick = () => setAst(G.guess + 10);
-    era.onclick = () => setAst(W.ast(-W.fromAst(G.guess) || 1));
+    for (const d of [-100, -10, -1, 1, 10, 100]) {
+      const sb = el("button", "wp-step", (d > 0 ? "+" : "−") + Math.abs(d));
+      sb.type = "button";
+      sb.setAttribute("aria-label", `${Math.abs(d)} year${Math.abs(d) === 1 ? "" : "s"} ${d > 0 ? "later" : "earlier"}`);
+      sb.addEventListener("click", () => setAst(G.guess + d));
+      steps.append(sb);
+    }
+    bcBtn.addEventListener("click", () => {
+      const y = W.fromAst(G.guess);
+      if (y > 0) setAst(W.ast(-y));
+      else touch();
+    });
+    adBtn.addEventListener("click", () => {
+      const y = W.fromAst(G.guess);
+      if (y < 0) setAst(W.ast(-y));
+      else touch();
+    });
     range.addEventListener("input", () => {
       G.guess = clampAst(posToAst(Number(range.value)));
+      touch();
       render();
     });
     inp.addEventListener("input", () => {
       inp.value = inp.value.replace(/\D/g, "").slice(0, 4);
       const v = Number(inp.value);
       if (!v) return;
+      touch();
       const bc = W.fromAst(G.guess) < 0;
       G.guess = clampAst(W.ast(bc ? -v : v));
       render(true);
     });
     inp.addEventListener("focus", () => inp.select());
-    card.append(row, range, ticks);
-    const go = el("button", "wp-btn primary wp-strike", "Strike! ⚔");
+    card.append(ybox, steps, range, ticks);
+    const go = el("button", "wp-btn primary wp-strike", "Set a year first ↑");
     go.type = "submit";
+    go.disabled = true;
     const acts = el("div", "wp-actions");
     acts.append(go);
     card.append(acts);
     card.addEventListener("submit", (e) => {
       e.preventDefault();
+      if (!G.touched) return; // never send a year you didn't pick
       submit(W.fromAst(G.guess));
     });
     showPanel(card);
@@ -1606,7 +1662,7 @@
         clock.classList.toggle("low", s <= 5);
         if (ms <= 700 && !sent) {
           sent = true;
-          submit(W.fromAst(G.guess));
+          submit(G.touched ? W.fromAst(G.guess) : null);
         }
       };
       tick();
@@ -1703,8 +1759,7 @@
     card.append(yr);
     const fact = W.factText(ev);
     if (fact) card.append(el("p", "wp-fact", fact));
-    const bd = W.bands(ev.y);
-    card.append(el("p", "wp-sub", `For this moment: within ${bd.close} yr${bd.close === 1 ? "" : "s"} is close, ${bd.near} is near, ${bd.rough} is rough.`));
+    card.append(el("p", "wp-sub", scoreExplain(res, ev)));
     return card;
   }
 
@@ -2119,10 +2174,27 @@
     }
     card.append(ol, el("p", "wp-sub", monumentSummary()));
     const acts = el("div", "wp-actions");
-    if (r.host === MP.me) acts.append(btn("Rematch ▶", "primary", () => mpSend({ t: "start" })), btn("Change rules", "", () => mpSend({ t: "lobby" })));
-    else acts.append(el("span", "wp-sub", "The host can start a rematch."));
-    acts.append(btn("Leave room", "ghost", () => (mpLeave(), showIntro())));
+    const hostP = r.players.find((p) => p.id === r.host);
+    if (r.host === MP.me) acts.append(btn("Play again ▶", "primary", () => mpSend({ t: "start" })), btn("Change the rules", "", () => mpSend({ t: "lobby" })));
+    else acts.append(el("span", "wp-sub", `Waiting for ${hostP ? hostP.name : "the host"} to start the next game.`));
+    acts.append(
+      btn("Leave room", "ghost", async () => {
+        if (await ask("Leave the war room?", "Your friends can keep playing without you.", "Leave room", "Stay")) {
+          mpLeave();
+          showIntro();
+        }
+      })
+    );
     card.append(acts);
+    // before the next game, anyone can switch empires
+    const mineP = r.players.find((p) => p.id === MP.me);
+    card.append(
+      empirePicker((mineP && mineP.empire) || G.empire, true, (k) => {
+        store.set("empire", k);
+        setEmpire(k);
+        mpSend({ t: "empire", empire: k });
+      })
+    );
     const list = el("ol", "wp-list");
     (r.items || []).forEach((it, i) => {
       const ev = W.LIST[it.id];
