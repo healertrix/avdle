@@ -193,6 +193,24 @@
     foeCache.set(spec, f);
     return f;
   }
+  // Another player's warrior, in their empire's colours, turned to face you.
+  function rivalFoe(player) {
+    const emp = EMP[player.empire] || EMP.maurya;
+    const c = emp.warrior;
+    const key = { r: c.plume, h: c.helm, k: C.visor, s: C.skin, a: c.armor, b: C.leather, l: C.legs };
+    const mirror = (rows) => rows.map((r) => [...r.padEnd(9, ".")].reverse().join(""));
+    const frames = [0, 1].map((f) => compile(mirror([...WAR_BODY, ...LEGS[f]]), key));
+    return { kind: "soldier", name: `${player.name}'s ${emp.name.replace(/ Empire$/, "")} warrior`, frames, hand: [0, 8], shieldAt: [7, 9], weapon: "sword", shield: "round", shieldC: c.armor, mouth: [1, 4], rival: player.id };
+  }
+  // In a war room with others, your rival for a round: the best of the others (or the first one before the round).
+  function rivalOf(list, myId) {
+    const others = (list || []).filter((p) => p.id !== myId);
+    if (!others.length) return null;
+    return others.slice().sort((a, b) => (b.points || 0) - (a.points || 0))[0];
+  }
+  const roomPlayers = () => (MP.room ? MP.room.players : []);
+  const pvp = () => G.mode === "room" && roomPlayers().length > 1;
+
   // Which foe blocks the road for this moment (the same for everyone in a room).
   function pickFoe(empKey, ev, i, n) {
     const emp = EMP[empKey];
@@ -885,6 +903,7 @@
   // =====================================================================
   const V = { scene: "map", prog: 0, gProg: 0, target: null, foe: null, duel: null, mon: null, flash: 0, flashColor: C.white, shake: 0, banner: null };
 
+  let duelLabel = null; // a one-on-one fight shows who won instead of the usual banner
   function startDuel(tier, foe, place, done) {
     P = [];
     refit(true);
@@ -896,7 +915,8 @@
     const bx = Math.round(R.view.left + (R.view.right - R.view.left) * 0.58);
     const by = gr - fsp.h * fk;
     const front = bx - gsp.w * k - 2 * k;
-    V.duel = { tier, foe, k, fk, bx, by, front, gr, place, t: 0, fired: new Set(), done, end: [5200, 4200, 4800, 4200, 3800, 3200][tier] };
+    V.duel = { tier, foe, k, fk, bx, by, front, gr, place, t: 0, fired: new Set(), done, end: [5200, 4200, 4800, 4200, 3800, 3200][tier], label: duelLabel };
+    duelLabel = null;
     V.scene = "duel";
     V.banner = null;
   }
@@ -940,7 +960,7 @@
       V.flash = Math.max(V.flash, n);
       V.flashColor = c;
     };
-    const banner = (big, small, color) => (V.banner = { big, small, color, t0: now });
+    const banner = (big, small, color) => (V.banner = D.label ? { ...D.label, t0: now } : { big, small, color, t0: now });
     const slashAt = (t0, dur = 220) => {
       const s = seg(D, t0, t0 + dur);
       if (s > 0 && s < 1) sword = lerp(-1.9, 0.6, ease(s));
@@ -1482,6 +1502,10 @@
     V.prog = progressOf(G.results, n);
     V.target = clamp(V.prog + 1 / (n === Infinity ? LAP : n), 0, 1);
     V.foe = pickFoe(G.empire, ev, i, n);
+    if (pvp()) {
+      const others = roomPlayers().filter((p) => p.id !== MP.me);
+      V.foe = rivalFoe(others[i % others.length]);
+    }
     setTop(`${momentLabel(i, n)}${G.mode === "room" && MP.room ? " · Room " + MP.room.code : ""}`, totalScore());
     const card = el("form", "wp-card wp-q");
     card.autocomplete = "off";
@@ -1489,7 +1513,7 @@
     const mult = W.MULT[ev.fame] || 1;
     top.append(el("span", "wp-cat", W.CATS[ev.cat] || ev.cat));
     if (mult > 1) top.append(el("span", "wp-mult", `×${mult} points`));
-    top.append(el("span", "wp-beast", `${V.foe.boss ? "Boss: " : ""}${V.foe.name} blocks the road`));
+    top.append(el("span", "wp-beast", V.foe.rival ? `⚔ One-on-one with ${V.foe.name}` : `${V.foe.boss ? "Boss: " : ""}${V.foe.name} blocks the road`));
     const clock = el("span", "wp-clock");
     clock.hidden = true;
     top.append(clock);
@@ -1611,7 +1635,27 @@
   // the fight, then (maybe) the monument, then the answer card
   function playResult(res, ev, i, n) {
     G.busy = true;
-    const foe = V.foe || pickFoe(G.empire, ev, i, n);
+    let foe = V.foe || pickFoe(G.empire, ev, i, n);
+    let tier = res.tier;
+    let label = null;
+    if (res.all && res.all.length > 1) {
+      // one-on-one: you against the best of the others this round
+      const me = res.all.find((p) => p.id === MP.me) || { points: res.points };
+      const rival = rivalOf(res.all, MP.me);
+      foe = rivalFoe(rival);
+      const diff = (me.points || 0) - (rival.points || 0);
+      const score = `YOU +${fmt(me.points || 0)} · ${rival.name.toUpperCase()} +${fmt(rival.points || 0)}`;
+      if (diff > 0) {
+        tier = Math.min(res.tier, 2);
+        label = { big: res.tier === 0 ? "CRUSHED!" : "YOU WIN", small: score, color: C.gold };
+      } else if (diff < 0) {
+        tier = 4;
+        label = { big: `${rival.name} WINS`, small: score, color: C.red };
+      } else {
+        tier = 3;
+        label = { big: "DRAW", small: score, color: C.ember };
+      }
+    }
     const card = el("div", "wp-card wp-fighting");
     card.append(el("p", "wp-eyebrow", "Your year: " + (res.guess != null ? W.yearText(res.guess) : "none")), el("p", "wp-sub", `Fighting the ${foe.name}…`));
     card.append(
@@ -1622,7 +1666,8 @@
     );
     showPanel(card);
     const place = placeAt(V.target != null ? V.target : V.prog);
-    startDuel(res.tier, foe, place, () => {
+    duelLabel = label;
+    startDuel(tier, foe, place, () => {
       V.prog = progressOf(G.results, n);
       V.target = null;
       const after = () => showReveal(res, ev, i, n);
@@ -1663,10 +1708,36 @@
     return card;
   }
 
+  function roundTable(res) {
+    const rows = res.all.slice().sort((a, b) => b.points - a.points);
+    const top = rows[0].points;
+    const box = el("div", "wp-roundtable");
+    box.append(el("div", "wp-label", "This round"));
+    for (const p of rows) {
+      const row = el("div", "wp-rt-row" + (p.id === MP.me ? " me" : "") + (p.points === top && top > 0 ? " win" : ""));
+      const emp = EMP[p.empire];
+      row.append(
+        el("span", "wp-rt-name", `${p.points === top && top > 0 ? "🏆 " : ""}${p.id === MP.me ? "You" : p.name}`),
+        el("span", "wp-rt-emp", emp ? emp.name.replace(/ Empire$/, "") : ""),
+        el("span", "wp-rt-year", p.guess != null ? W.yearText(p.guess) : "—"),
+        el("b", null, `+${fmt(p.points)}`),
+        el("span", "wp-rt-total", `${fmt(p.score)} total`)
+      );
+      box.append(row);
+    }
+    const me = res.all.find((p) => p.id === MP.me);
+    const rival = rivalOf(res.all, MP.me);
+    if (me && rival) {
+      const d = me.points - rival.points;
+      box.append(el("p", "wp-sub", d > 0 ? `You beat ${rival.name} by ${fmt(d)} points this round.` : d < 0 ? `${rival.name} beat you by ${fmt(-d)} points this round.` : `You and ${rival.name} scored the same.`));
+    }
+    return box;
+  }
   function showReveal(res, ev, i, n) {
     G.busy = true;
     setTop(momentLabel(i, n), totalScore());
     const card = revealCard(res, ev);
+    if (res.all && res.all.length > 1) card.insertBefore(roundTable(res), card.querySelector(".wp-years"));
     const acts = el("div", "wp-actions");
     const lastQ = i + 1 >= n;
     const next = btn(lastQ ? (G.daily ? "See today's results ▶" : "See the march ▶") : "Next moment ▶", "primary", () => {
@@ -1842,7 +1913,9 @@
       const prev = MP.room;
       MP.room = m;
       G.mode = "room";
-      if (m.settings && m.settings.empire && m.settings.empire !== G.empire) setEmpire(m.settings.empire);
+      const mine = m.players && m.players.find((p) => p.id === (m.you || MP.me));
+      if (m.you) MP.me = m.you;
+      if (mine && mine.empire && mine.empire !== G.empire) setEmpire(mine.empire);
       if (m.state === "round" && (!prev || prev.state !== "round" || (m.round === 0 && MP.shownRound > 0))) newRoomGame();
       if (G.busy) return updateNextButton(); // let the fight and the answer card finish first
       mpRender();
@@ -1891,6 +1964,11 @@
     for (const p of r.players) {
       const li = el("li", p.connected ? "" : "off");
       li.append(el("span", "wp-pname", p.name + (p.id === MP.me ? " (you)" : "")));
+      if (p.empire && EMP[p.empire]) {
+        const tag = el("span", "wp-pemp", EMP[p.empire].name.replace(/ Empire$/, ""));
+        tag.style.setProperty("--emp", shade(EMP[p.empire].color, 1.5));
+        li.append(tag);
+      }
       const tags = [p.id === r.host ? "host" : "", p.connected ? "" : "offline", showPicked ? (p.picked ? "✓ answered" : "thinking…") : ""].filter(Boolean).join(" · ");
       li.append(el("span", "wp-ptag", tags));
       ul.append(li);
@@ -1940,7 +2018,7 @@
       btn("Create a war room", "primary", () => {
         status("Creating room…");
         const n = getName();
-        mpConnect(() => mpSend({ t: "create", name: n, settings }));
+        mpConnect(() => mpSend({ t: "create", name: n, settings, empire: settings.empire }));
       })
     );
     card.append(acts);
@@ -1955,7 +2033,7 @@
       if (!/^[A-Z]{4}$/.test(c)) return status("Room codes are 4 letters.");
       status("Joining…");
       const n = getName();
-      mpConnect(() => mpSend({ t: "join", code: c, name: n }));
+      mpConnect(() => mpSend({ t: "join", code: c, name: n, empire: G.empire }));
     };
     codeIn.addEventListener("keydown", (e) => e.key === "Enter" && doJoin());
     join.append(el("span", "wp-label", "Or join one"), codeIn, btn("Join", "", doJoin));
@@ -1996,8 +2074,15 @@
     const isHost = r.host === MP.me;
     const s = r.settings;
     const change = (patch) => mpSend({ t: "settings", settings: { ...s, ...patch } });
+    const mine = r.players.find((p) => p.id === MP.me);
+    const myEmpire = (mine && mine.empire) || G.empire;
+    card.append(el("p", "wp-sub", r.players.length > 1 ? "Every round is a one-on-one fight with a rival's warrior. The closer year wins." : "On your own you fight each empire's real enemies. Invite a friend to fight one-on-one."));
     card.append(
-      empirePicker(s.empire, isHost, (k) => change({ empire: k })),
+      empirePicker(myEmpire, true, (k) => {
+        store.set("empire", k);
+        setEmpire(k);
+        mpSend({ t: "empire", empire: k });
+      }),
       levelPicker(s.level, isHost, (v) => change({ level: v })),
       segPicker("Questions", ROUND_OPTS, s.rounds, isHost, (v) => change({ rounds: v })),
       segPicker("Time per moment", TIMER_OPTS, s.timer, isHost, (v) => change({ timer: v }))
@@ -2029,7 +2114,7 @@
     for (const p of ranked) {
       const li = el("li", p.id === MP.me ? "me" : "");
       const mons = Math.min(MONUMENT_STAGES, (p.history || []).filter((h) => h && h.monument).length);
-      li.append(el("span", "wp-pname", p.name), el("span", "wp-emoji small", (p.history || []).map((h) => W.TIERS[h ? h.tier : 5].emoji).join("") + (mons ? ` 🏛${mons}` : "")), el("b", null, fmt(p.score)));
+      li.append(el("span", "wp-pname", `${p.name}${p.empire && EMP[p.empire] ? ` · ${EMP[p.empire].name.replace(/ Empire$/, "")}` : ""}`), el("span", "wp-emoji small", (p.history || []).map((h) => W.TIERS[h ? h.tier : 5].emoji).join("") + (mons ? ` 🏛${mons}` : "")), el("b", null, fmt(p.score)));
       ol.append(li);
     }
     card.append(ol, el("p", "wp-sub", monumentSummary()));

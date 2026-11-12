@@ -1,0 +1,14 @@
+# Files Cloudflare must not serve as public assets (only index.html, css/, js/, data/, vendor/ are the site)
+.git
+.gitignore
+.assetsignore
+.wrangler
+node_modules
+server
+worker
+tools
+raw
+wrangler.jsonc
+package.json
+package-lock.json
+README.md

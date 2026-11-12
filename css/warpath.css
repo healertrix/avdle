@@ -205,3 +205,19 @@ body.wp-open { overflow: hidden; }
 /* "dot world": Avdle's Dates questions turn the map into the dot-matrix world behind the cards */
 .wp.wp-backdrop { top: var(--top-h, 56px); z-index: 2; pointer-events: none; background: transparent; }
 .wp.wp-backdrop .wp-top, .wp.wp-backdrop .wp-panel, .wp.wp-backdrop .wp-modal { display: none; }
+
+/* one-on-one war rooms */
+.wp-pemp { --emp: #ffcf5a; font: 700 11px var(--wp-mono); color: var(--emp); border: 1px solid var(--emp); border-radius: 999px; padding: 1px 8px; }
+.wp-roundtable { display: grid; gap: 4px; }
+.wp-rt-row { display: grid; grid-template-columns: 1fr auto auto auto; gap: 2px 10px; align-items: center; padding: 6px 10px; border: 1px solid var(--wp-edge); border-radius: 10px; }
+.wp-rt-row.me { border-color: var(--wp-amber); }
+.wp-rt-row.win { background: rgba(255, 207, 90, 0.08); }
+.wp-rt-name { font-weight: 800; }
+.wp-rt-emp { font: 600 11px var(--wp-mono); color: var(--wp-muted); }
+.wp-rt-year { font: 700 13px var(--wp-mono); }
+.wp-rt-row b { font-family: var(--wp-mono); color: var(--wp-amber); }
+.wp-rt-total { grid-column: 1 / -1; font: 600 11px var(--wp-mono); color: var(--wp-muted); }
+@media (max-width: 560px) {
+  .wp-rt-row { grid-template-columns: 1fr auto auto; }
+  .wp-rt-emp { display: none; }
+}
