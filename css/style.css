@@ -732,3 +732,49 @@ button, .btn, .icon-btn, .tile, .menu-item, .ans-chip, a { touch-action: manipul
   .dock { bottom: 6px; }
   .zoom-ctl { top: 50%; bottom: auto; transform: translateY(-50%); }
 }
+
+/* ---------- native-app feel (js/native.js does the Back button, haptics and swipes) ---------- */
+/* no pull-to-refresh or rubber-band bounce behind the game, no long-press menus or text
+   selection on buttons and tiles; reading panels and inputs stay selectable */
+html, body { overscroll-behavior: none; }
+body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+input, textarea, select, [contenteditable], .detail, .wiki, .answer-list, .person-sheet .wiki { -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; }
+img, svg { -webkit-user-drag: none; }
+button, [role="button"], label, summary, .seg-btn, .kbc-btn, .wp-btn, .chip { -webkit-tap-highlight-color: transparent; }
+/* notches and rounded corners when the phone is held sideways */
+.topbar { padding-left: max(14px, env(safe-area-inset-left)); padding-right: max(14px, env(safe-area-inset-right)); }
+/* press feedback like a native button */
+.menu-item:active, .seg-btn:active, .ans-chip:active, .pill-btn:active { transform: scale(0.97); }
+.menu-item:active { background: var(--paper-2); }
+.btn, .icon-btn, .menu-item, .seg-btn, .ans-chip, .pill-btn, .tile { transition: transform 0.12s ease, background-color 0.15s ease; }
+
+@media (prefers-reduced-motion: no-preference) {
+  /* the ☰ menu slides in from the edge */
+  dialog.menu-dlg[open] .menu { animation: nv-drawer 0.26s cubic-bezier(0.2, 0.8, 0.2, 1); }
+  dialog[open]::backdrop { animation: nv-fade 0.22s ease; }
+  dialog[open]:not(.menu-dlg) > * { animation: nv-pop 0.22s cubic-bezier(0.2, 0.8, 0.2, 1); }
+  /* result sheets and docks rise from the bottom; the country panel too */
+  .sheet:not([hidden]), .dock:not([hidden]) { animation: nv-rise 0.26s cubic-bezier(0.2, 0.8, 0.2, 1); }
+  .page:not([hidden]) { animation: nv-fade 0.2s ease; }
+}
+@keyframes nv-drawer { from { transform: translateX(-100%); } to { transform: none; } }
+@keyframes nv-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes nv-pop { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: none; } }
+@keyframes nv-rise { from { opacity: 0; transform: translate(-50%, 24px); } to { opacity: 1; transform: translate(-50%, 0); } }
+@keyframes nv-sheet { from { transform: translateY(100%); } to { transform: none; } }
+
+@media (max-width: 640px) {
+  /* dialogs become bottom sheets with a grab handle; swipe down to close */
+  dialog:not(.menu-dlg) { margin: auto 0 0; width: 100%; max-width: 100%; max-height: calc(100dvh - max(24px, env(safe-area-inset-top))); }
+  dialog:not(.menu-dlg) > .dlg { border-radius: 24px 24px 0 0; padding-bottom: calc(18px + env(safe-area-inset-bottom)); position: relative; padding-top: 26px; }
+  dialog:not(.menu-dlg) > .dlg::before { content: ""; position: absolute; top: 9px; left: 50%; width: 38px; height: 5px; margin-left: -19px; border-radius: 99px; background: var(--paper-edge); }
+  .dlg-actions .btn, .dlg > .btn.primary { min-height: 46px; }
+  .dlg > .btn.primary { justify-self: stretch; }
+  dialog.menu-dlg .menu { padding-top: max(16px, env(safe-area-inset-top)); padding-bottom: max(16px, env(safe-area-inset-bottom)); }
+  .menu-item { min-height: 48px; }
+}
+@media (max-width: 640px) and (prefers-reduced-motion: no-preference) {
+  dialog[open]:not(.menu-dlg) > * { animation: nv-sheet 0.28s cubic-bezier(0.2, 0.8, 0.2, 1); }
+}
+/* installed app: no browser chrome, so the top bar reaches under the status bar */
+.is-app .topbar { padding-top: max(10px, env(safe-area-inset-top)); }

@@ -6,8 +6,16 @@
   <title>Avdle</title>
   <meta name="description" content="A geography game: pin a country that fits the prompt, or name a famous person from where they were born and died. The less obvious your answer, the more it scores.">
   <meta name="theme-color" content="#ffffff">
+  <meta name="color-scheme" content="light dark">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Avdle">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="format-detection" content="telephone=no">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 30C14 24 6 19 6 12a10 10 0 0 1 20 0c0 7-8 12-10 18z' fill='%232a4bd7'/%3E%3Ccircle cx='16' cy='12' r='4' fill='%23fff'/%3E%3C/svg%3E">
-  <link rel="stylesheet" href="css/style.css?v=18">
+  <link rel="stylesheet" href="css/style.css?v=19">
   <link rel="stylesheet" href="css/warpath.css?v=9">
   <link rel="stylesheet" href="css/kbc.css?v=5">
 </head>
@@ -371,6 +379,7 @@
         <button class="menu-item" data-go="help"><i class="m-ico">?</i>How to play</button>
         <button class="menu-item" data-go="settings"><i class="m-ico">⚙</i>Settings</button>
         <button class="menu-item" data-go="settings" data-offline><i class="m-ico">⤓</i>Play offline (download all)</button>
+        <button class="menu-item" id="installItem" hidden><i class="m-ico m1">⊕</i>Install app</button>
       </nav>
     </dialog>
 
@@ -408,6 +417,14 @@
         <p class="small">Territories count for the country they belong to (Greenland is Denmark, Guam is the United States). Tiny countries have a dot so you can tap them.</p>
         <p class="small">Use ☰ for the menu and Exit to leave any screen. Keyboard: arrows pan, + / − zoom, Enter drops the pin or moves on, Esc closes panels.</p>
         <button class="btn primary" value="close">Got it</button>
+      </form>
+    </dialog>
+
+    <dialog id="iosInstallDlg">
+      <form method="dialog" class="card dlg">
+        <h3>Install Avdle</h3>
+        <p>Tap the <b>Share</b> button <span aria-hidden="true">(□↑)</span> in Safari, then <b>Add to Home Screen</b>. Avdle then opens full screen like any other app.</p>
+        <button class="btn primary" value="ok">Got it</button>
       </form>
     </dialog>
 
@@ -470,5 +487,6 @@
   <script src="js/kbc-fx.js?v=2"></script>
   <script src="js/kbc.js?v=5"></script>
   <script src="js/offline.js?v=1"></script>
+  <script src="js/native.js?v=1"></script>
 </body>
 </html>
