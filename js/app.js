@@ -128,7 +128,8 @@
     W = mapEl.clientWidth;
     H = mapEl.clientHeight;
     if (!W || !H) return;
-    dpr = Math.min(2, window.devicePixelRatio || 1);
+    // phones redraw at a slightly lower resolution so pinch-zoom stays smooth
+    dpr = Math.min(window.innerWidth < 700 ? 1.5 : 2, window.devicePixelRatio || 1);
     canvas.width = Math.round(W * dpr);
     canvas.height = Math.round(H * dpr);
     canvas.style.width = W + "px";

@@ -251,3 +251,14 @@ body.wp-open { overflow: hidden; }
   .wp-steps { gap: 4px; }
   .wp-steps .wp-step { font-size: 12px; height: 38px; }
 }
+
+/* phones: panels sized to the visible screen, and room for the browser bars */
+.wp { height: 100dvh; }
+@media (max-width: 560px) {
+  .wp-panel { max-height: 58dvh; overscroll-behavior: contain; }
+  .wp-modal-box { max-height: calc(100dvh - 24px); overflow-y: auto; }
+  .wp input, .wp select { font-size: 16px; }
+}
+@media (max-height: 480px) and (orientation: landscape) {
+  .wp-panel { max-height: 78dvh; }
+}
