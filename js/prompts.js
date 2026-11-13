@@ -110,6 +110,8 @@
     river: 2.5, sea: 2.5, mountains: 2, desert: 1.5, lines: 2.5, animals: 2.5, landmarks: 2, sport: 2,
     science: 1.5, crops: 3, resources: 2,
     origins: 2.5, food: 2.5, voyages: 2, history: 2.5, culture: 2, politics: 2.5, flags: 1.5, nature: 2, lakes: 1.5,
+    sizeVs: 1.5, popVs: 1.5, neighbourSize: 1.2, twoAway: 1.5, rank: 1.5, density: 1, borderExact: 1, subMix: 1.2, langSub: 1,
+    currencyRegion: 1, capRegion: 1,
   };
   const FAMILY_LABEL = {
     lang: "Language", langRegion: "Language", border: "Borders", borderPair: "Borders", borderCount: "Borders", landlocked: "Coastlines",
@@ -119,6 +121,8 @@
     landmarks: "Landmarks", sport: "Sport", science: "Science", crops: "Crops", resources: "Resources",
     origins: "Where it began", food: "Food & drink", voyages: "Famous journeys", history: "History", culture: "Culture",
     politics: "Politics", flags: "Flags", nature: "Nature", lakes: "Lakes",
+    sizeVs: "Size", popVs: "People", neighbourSize: "Neighbours", twoAway: "Borders", rank: "Rankings", density: "People",
+    borderExact: "Borders", subMix: "Regions", langSub: "Language", currencyRegion: "Money", capRegion: "Capitals",
   };
 
   function buildPool() {
@@ -285,6 +289,116 @@
       for (const [r, subj] of regionEntries) add("pop", `${k}/${r}`, `Pin ${subj} ${phrase}.`, (c) => c.region === r && f(c), popWhy, FACTS.pop, { note: "World Bank 2023 estimates." });
     }
 
+    // ---- Comparisons: bigger, smaller, more or fewer people than a given country ----
+    const km = (c) => `${fmt(Math.round(c.area))} km²`;
+    for (const x of COUNTRIES) {
+      add("sizeVs", `>${x.id}`, `Pin a country that is larger than ${x.name}.`, (c) => c.area > x.area,
+        (c) => `${c.name} covers ${km(c)}, more than ${x.name}'s ${km(x)}.`, FACTS.area, { topic: x.name });
+      add("sizeVs", `<${x.id}`, `Pin a country that is smaller than ${x.name}.`, (c) => c.area < x.area,
+        (c) => `${c.name} covers ${km(c)}, less than ${x.name}'s ${km(x)}.`, FACTS.area, { topic: x.name });
+      add("popVs", `>${x.id}`, `Pin a country with more people than ${x.name}.`, (c) => c.pop > x.pop,
+        (c) => `${c.name} has about ${fmtPop(c.pop)} people; ${x.name} has about ${fmtPop(x.pop)}.`, FACTS.pop, { note: "World Bank 2023 estimates.", topic: x.name });
+      add("popVs", `<${x.id}`, `Pin a country with fewer people than ${x.name}.`, (c) => c.pop < x.pop,
+        (c) => `${c.name} has about ${fmtPop(c.pop)} people; ${x.name} has about ${fmtPop(x.pop)}.`, FACTS.pop, { note: "World Bank 2023 estimates.", topic: x.name });
+    }
+
+    // ---- Neighbours that are bigger or smaller ----
+    for (const x of COUNTRIES) {
+      const nb = new Set(x.borders);
+      add("neighbourSize", `big:${x.id}`, `Pin a neighbour of ${x.name} that is larger than it.`, (c) => nb.has(c.id) && c.area > x.area,
+        (c) => `${c.name} borders ${x.name} and covers ${km(c)}, against ${x.name}'s ${km(x)}.`, FACTS.area, { note: "Land borders only.", topic: x.name });
+      add("neighbourSize", `small:${x.id}`, `Pin a neighbour of ${x.name} that is smaller than it.`, (c) => nb.has(c.id) && c.area < x.area,
+        (c) => `${c.name} borders ${x.name} and covers ${km(c)}, against ${x.name}'s ${km(x)}.`, FACTS.area, { note: "Land borders only.", topic: x.name });
+      add("neighbourSize", `fewer:${x.id}`, `Pin a neighbour of ${x.name} with fewer people than it.`, (c) => nb.has(c.id) && c.pop < x.pop,
+        (c) => `${c.name} borders ${x.name} and has about ${fmtPop(c.pop)} people, against ${fmtPop(x.pop)}.`, FACTS.pop, { note: "Land borders only. World Bank 2023 estimates.", topic: x.name });
+      add("neighbourSize", `pop:${x.id}`, `Pin a neighbour of ${x.name} with more people than it.`, (c) => nb.has(c.id) && c.pop > x.pop,
+        (c) => `${c.name} borders ${x.name} and has about ${fmtPop(c.pop)} people, against ${fmtPop(x.pop)}.`, FACTS.pop, { note: "Land borders only. World Bank 2023 estimates.", topic: x.name });
+    }
+
+    // ---- Two borders away: not a neighbour, but a neighbour's neighbour ----
+    for (const x of COUNTRIES) {
+      const near = new Set(x.borders);
+      const via = (c) => c.borders.filter((b) => near.has(b));
+      add("twoAway", x.id, `Pin a country that doesn't border ${x.name} but borders one of its neighbours.`,
+        (c) => c.id !== x.id && !near.has(c.id) && via(c).length > 0,
+        (c) => { const v = via(c).map((id) => BY_ID[id].name); const said = v.length > 1 ? `${v.slice(0, -1).join(", ")} and ${v[v.length - 1]}` : v[0];
+          return `${c.name} doesn't touch ${x.name}, but it borders ${said}, which ${v.length > 1 ? "do" : "does"}.`; }, FACTS.borders,
+        { note: "Land borders only.", topic: x.name });
+    }
+
+    // ---- Rankings: the biggest, most populous and smallest, worldwide and by region ----
+    const ord = (n) => n + (n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] || "th");
+    const ranked = (cs, key, desc) => [...cs].sort((a, b) => (desc ? b[key] - a[key] : a[key] - b[key]));
+    const RANKS = [
+      ["area", true, "largest countries by area", (c) => km(c)],
+      ["pop", true, "most populous countries", (c) => `${fmtPop(c.pop)} people`],
+      ["area", false, "smallest countries by area", (c) => km(c)],
+      ["pop", false, "least populous countries", (c) => `${fmtPop(c.pop)} people`],
+    ];
+    const OWNER = { Americas: "the Americas'" };
+    const scopes = [["world", "the world's", "in the world", COUNTRIES],
+      ...Object.keys(REGIONS).map((r) => [r, OWNER[r] || `${r}'s`, `in ${REGION_NAME[r]}`, COUNTRIES.filter((c) => c.region === r)])];
+    for (const [sk, owner, where, cs] of scopes)
+      for (const [key, desc, what, show] of RANKS)
+        for (const n of [5, 10, 20]) {
+          if (cs.length < n * 2) continue;
+          const order = ranked(cs, key, desc);
+          const top = new Set(order.slice(0, n).map((c) => c.id));
+          const one = what.replace("countries", "country").replace(" by area", "");
+          add("rank", `${sk}:${key}:${desc ? "top" : "bottom"}${n}`, `Pin one of ${owner} ${n} ${what}.`, (c) => top.has(c.id),
+            (c) => { const k = order.indexOf(c) + 1; return `${c.name} is the ${k === 1 ? "" : ord(k) + " "}${one} ${where}, with ${show(c)}.`; },
+            key === "area" ? FACTS.area : FACTS.pop, { min: 3, note: key === "pop" ? "World Bank 2023 estimates." : "" });
+        }
+
+    // ---- Population density ----
+    const dens = (c) => c.pop / c.area;
+    const densWhy = (c) => `${c.name} has about ${fmt(Math.round(dens(c)))} people per km² (${fmtPop(c.pop)} people on ${km(c)}).`;
+    const DENSITY = [
+      [">500", "more than 500 people per km²", (c) => dens(c) > 500],
+      [">300", "more than 300 people per km²", (c) => dens(c) > 300],
+      [">150", "more than 150 people per km²", (c) => dens(c) > 150],
+      ["<10", "fewer than 10 people per km²", (c) => dens(c) < 10],
+      ["<25", "fewer than 25 people per km²", (c) => dens(c) < 25],
+    ];
+    for (const [k, phrase, f] of DENSITY) {
+      add("density", k, `Pin a country with ${phrase}.`, f, densWhy, FACTS.pop, { note: "Population divided by land and water area; World Bank 2023 estimates." });
+      for (const [r, subj] of regionEntries)
+        add("density", `${k}/${r}`, `Pin ${subj} with ${phrase}.`, (c) => c.region === r && f(c), densWhy, FACTS.pop, { note: "Population divided by total area; World Bank 2023 estimates." });
+    }
+
+    // ---- Exactly N neighbours ----
+    for (const n of [2, 3, 4, 5]) {
+      add("borderExact", `=${n}`, `Pin a country that borders exactly ${n} other countries.`, (c) => c.borders.length === n, nbWhy, FACTS.borders, { note: BORDER_NOTE });
+      for (const [r, subj] of regionEntries)
+        add("borderExact", `=${n}/${r}`, `Pin ${subj} that borders exactly ${n} other countries.`, (c) => c.region === r && c.borders.length === n, nbWhy, FACTS.borders, { note: BORDER_NOTE });
+    }
+
+    // ---- Regions mixed with coastlines, roads and languages ----
+    for (const [sub, [subj, nm]] of Object.entries(SUBREGIONS)) {
+      add("subMix", `ll/${sub}`, `Pin ${subj} that is landlocked.`, (c) => c.subregion === sub && c.landlocked, llWhy, FACTS.landlocked, { topic: nm });
+      add("subMix", `coast/${sub}`, `Pin ${subj} with a coastline.`, (c) => c.subregion === sub && !c.landlocked,
+        (c) => `${c.name} is in ${nm} and has a coastline.`, FACTS.landlocked, { topic: nm });
+      add("subMix", `isl/${sub}`, `Pin ${subj} with no land borders.`, (c) => c.subregion === sub && !c.borders.length, islWhy, FACTS.borders, { topic: nm });
+      add("subMix", `left/${sub}`, `Pin ${subj} where people drive on the left.`, (c) => c.subregion === sub && c.drive === "left", dWhy, FACTS.drive, { topic: nm });
+      for (const l of ["English", "French", "Spanish", "Arabic", "Portuguese"])
+        add("langSub", `${l}/${sub}`, `Pin ${subj} where ${l} is an official language.`, (c) => c.subregion === sub && c.languages.includes(l), langWhy(l), FACTS.lang,
+          { note: LANG_NOTE, topic: `${l} language` });
+    }
+
+    // ---- Money and capitals by region ----
+    for (const [key, phrase, re] of CURRENCY) {
+      const m = (x) => re.test(strip(x).toLowerCase());
+      for (const [r, subj] of regionEntries)
+        add("currencyRegion", `${key}/${r}`, `Pin ${subj} that uses ${phrase}.`, (c) => c.region === r && c.currencies.some(m),
+          (c) => `${c.name} uses the ${c.currencies.filter(m).join(" and the ")}.`, FACTS.currency,
+          { note: "Counts every official currency, including a foreign one a country has adopted." });
+    }
+    for (const L of ALPHA)
+      for (const [r, subj] of regionEntries)
+        add("capRegion", `${L}/${r}`, `Pin ${subj} whose capital starts with ${L}.`, (c) => c.region === r && c.capitals.some((k) => letters(k)[0] === L),
+          (c) => `The capital of ${c.name} is ${c.capitals.find((k) => letters(k)[0] === L)}.`, FACTS.capital,
+          { note: "Countries with more than one capital count if any of them fits." });
+
     // Trivia sets: rivers, seas, mountains, animals, crops, landmarks, sport, science...
     for (const set of FACT_SETS) {
       const ids = Object.keys(set.answers);
@@ -351,6 +465,8 @@
     landlocked: "coast", island: "coast", sea: "coast", area: "size", pop: "size",
     crops: "produce", resources: "produce", mountains: "terrain", desert: "terrain", nature: "terrain",
     origins: "origins", food: "origins", river: "water", lakes: "water", politics: "politics", flags: "politics",
+    sizeVs: "size", popVs: "size", neighbourSize: "size", rank: "size", density: "size", twoAway: "border", borderExact: "border",
+    subMix: "coast", langSub: "lang", capRegion: "letter", currencyRegion: "money", currency: "money",
   };
 
   // Draw `n` prompts from different families, skipping ids in `avoid` when possible.
