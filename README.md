@@ -57,6 +57,19 @@ Its own section, with its own screen and its own war rooms. Open it from the big
 - **Difficulty slider** (Recruit to Legend) and **questions** (5 to 20, or ∞ for an endless march: the road loops in laps of 10 and every 10th foe is a boss). **War rooms:** the host picks the empire, difficulty, questions and a clock (none, or 20 to 90 seconds); everyone fights the same foes. With a clock, the server waits 10 seconds between rounds before the next clock starts, so watching your fight doesn't eat into your time. Warpath rooms only play Warpath.
 - Files: `data/events.js` (the moments: `[year, fame 1-5, category, moment, fact]`, with negative years for BC), `js/warpath.js` (scoring, which the server also uses), `js/warpath-empires.js` (maps, routes, enemies, monuments) and `js/warpath-ui.js` (the dot-matrix screen).
 
+## On phones (install it like an app)
+
+Avdle is an installable web app (`manifest.webmanifest`, icons in `icons/`). In Chrome on Android, ☰ → **Install app**; on iPhone, Safari's Share → **Add to Home Screen** (☰ → Install app explains it). It then opens full screen with its own icon, and long-pressing the icon offers Daily, Warpath and Crorepati.
+
+`js/native.js` makes it feel like a native app:
+
+- **Back button / back gesture** closes whatever is on top (a dialog, the country panel, Warpath, Crorepati) or leaves the current game (with the usual "Leave this game?" check), instead of leaving the site. On the home screen, Back exits as usual.
+- **Haptics** on Android: a light tick on main buttons, a double buzz for a correct pin and a single one for a miss (off when the phone asks for reduced motion).
+- **Swipe to close**: the ☰ menu slides away to the left; dialogs are bottom sheets on phones and slide down.
+- The status bar takes the colour of the screen (dark in Warpath and Crorepati), and there is no pull-to-refresh, rubber-band bounce or long-press text selection on buttons.
+
+The PNG icons are drawn by `node tools/build-icons.mjs` (no dependencies).
+
 ## Put it online (Cloudflare Tunnel)
 
 Quick tunnel (no account; you get a random `*.trycloudflare.com` address that changes each time):
