@@ -2241,9 +2241,6 @@
     else if (GO[go]) navigate(GO[go]);
   });
   $("#exitBtn").addEventListener("click", () => navigate(showHome));
-  // desktop top-bar links do exactly what the matching menu item does
-  for (const b of document.querySelectorAll(".desk-nav [data-menu]"))
-    b.addEventListener("click", () => document.querySelector(`#menuDlg ${b.dataset.menu}`)?.click());
 
   // ---------- dialogs, toast, settings ----------
   let toastId = null;
