@@ -778,3 +778,34 @@ button, [role="button"], label, summary, .seg-btn, .kbc-btn, .wp-btn, .chip { -w
 }
 /* installed app: no browser chrome, so the top bar reaches under the status bar */
 .is-app .topbar { padding-top: max(10px, env(safe-area-inset-top)); }
+
+/* the page is never wider than the phone: the grid column may shrink below the top bar's
+   text (otherwise a long mode label widens the page and iOS zooms everything out) */
+#app { grid-template-columns: minmax(0, 1fr); }
+.topbar, .stage { min-width: 0; }
+@media (max-width: 480px) {
+  /* the prompt card already names the mode; the top bar keeps just the score */
+  #modeLabel { display: none; }
+  .topbar { gap: 6px; }
+  .top-actions { gap: 4px; }
+}
+@media (max-width: 640px) {
+  /* result cards: the buttons stay in reach while the story scrolls under them */
+  .sheet .sheet-actions {
+    position: sticky; bottom: 0; z-index: 1; background: var(--paper); border-top: 1px solid var(--line);
+    margin: 12px -14px calc(-14px - env(safe-area-inset-bottom)); padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
+  }
+  .person-head { grid-template-columns: 72px 1fr; gap: 12px; }
+  .person-photo { width: 72px; border-radius: 36px 36px 12px 12px; }
+  .person-name { font-size: 21px; margin-top: 6px; }
+  .person-desc { font-size: 15px; margin-bottom: 8px; }
+  .person-life { font-size: 13px; }
+  .person-known { font-size: 14px; margin-top: 10px; }
+  /* the name box is taller than the pin dock: keep the zoom buttons above it */
+  .stage:has(#guessDock:not([hidden])) .zoom-ctl,
+  .stage:has(#yearDock:not([hidden])) .zoom-ctl { bottom: calc(118px + env(safe-area-inset-bottom) + var(--kb, 0px)); }
+  .guess-extra { padding: 0 2px; font-size: 13px; }
+}
+/* lift the answer bars above the on-screen keyboard (iOS doesn't resize the page for it;
+   js/native.js sets --kb from the visual viewport) */
+.dock { margin-bottom: var(--kb, 0px); transition: margin-bottom 0.15s ease; }
