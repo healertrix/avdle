@@ -43,6 +43,15 @@
   });
 
   send({ type: "status" });
+  // the menu's "Play offline" opens Settings; bring the download button into view
+  document.querySelectorAll("[data-offline]").forEach((m) =>
+    m.addEventListener("click", () =>
+      setTimeout(() => {
+        btn.scrollIntoView({ block: "center" });
+        btn.focus({ preventScroll: true });
+      }, 60)
+    )
+  );
   btn.addEventListener("click", (e) => {
     e.preventDefault();
     if (state === "ready") send({ type: "remove" });
