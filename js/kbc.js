@@ -230,11 +230,13 @@
           <div class="kbc-acts" id="kbcActs"></div>
         </div>
         <div class="kbc-banner" id="kbcBanner" hidden></div>
+        <div class="kbc-spec" id="kbcSpec" hidden></div>
       </main>
       <aside class="kbc-side">
         <div class="kbc-ladder" id="kbcLadder" aria-label="Money ladder"><ol id="kbcRungs"></ol></div>
         <section class="kbc-chat" id="kbcChat" hidden aria-label="Chat">
           <header class="kbc-chat-head"><b id="kbcChatTitle">Chat</b><span id="kbcChatWho"></span></header>
+          <ol class="kbc-board" id="kbcBoard" hidden aria-label="Scoreboard"></ol>
           <ol class="kbc-chat-log" id="kbcChatLog" aria-live="polite"></ol>
           <div class="kbc-chips" id="kbcChips"></div>
           <form class="kbc-chat-form" id="kbcChatForm" autocomplete="off"><input id="kbcChatIn" maxlength="240" placeholder="Say something…" aria-label="Chat message"><button class="kbc-btn small gold" type="submit">Send</button></form>
@@ -261,10 +263,18 @@
   // =====================================================================
   // Two-player networking
   // =====================================================================
-  const NET = { ws: null, role: null, code: null, token: null, players: [], chat: [], leaving: false, onJoined: null, onPlayers: null, onError: null };
-  const duo = () => !!NET.code;
-  const isLead = () => !duo() || NET.role === "lead";
+  const NET = {
+    ws: null, kind: null, id: null, role: null, code: null, token: null, players: [], chat: [], leaving: false,
+    phase: null, host: null, watching: null, round: null, results: null, onJoined: null, onPlayers: null, onError: null,
+  };
+  const duo = () => !!NET.code && NET.kind !== "party"; // two players, one game
+  const party = () => !!NET.code && NET.kind === "party"; // a group: same questions, everyone plays their own game
+  // who controls the stage: solo players, the duo's lead, and party players watching nobody
+  const isLead = () => !NET.code || (party() ? NET.watching == null : NET.role === "lead");
   const otherName = () => (NET.players.find((p) => p.role !== NET.role) || {}).name || "";
+  const isHost = () => party() && NET.host === NET.id;
+  const nameOf = (id) => (NET.players.find((p) => p.id === id) || {}).name || "a player";
+  const prevStatus = {};
   function netSend(m) {
     if (NET.ws && NET.ws.readyState === 1) NET.ws.send(JSON.stringify(m));
   }
@@ -293,28 +303,53 @@
     NET.leaving = true;
     netSend({ t: "leave" });
     if (NET.ws) NET.ws.close();
-    Object.assign(NET, { ws: null, role: null, code: null, token: null, players: [], chat: [] });
+    Object.assign(NET, { ws: null, kind: null, id: null, role: null, code: null, token: null, players: [], chat: [], phase: null, host: null, watching: null, round: null, results: null });
     syncChat();
   }
   function onNet(m) {
     if (m.t === "error") return NET.onError && NET.onError(m.msg);
     if (m.t === "joined") {
       const fresh = !NET.code;
-      Object.assign(NET, { role: m.role, code: m.code, token: m.token, players: m.players });
+      Object.assign(NET, { kind: m.kind || "duo", id: m.id, role: m.role, code: m.code, token: m.token, players: m.players, phase: m.phase, host: m.host });
       if (fresh) {
         NET.chat = m.chat || [];
         chatLog.replaceChildren();
       }
       syncChat();
       if (NET.onJoined) NET.onJoined();
+      if (party()) {
+        // arriving in the middle of a round, or just after one
+        if (fresh && m.round) {
+          NET.round = m.round;
+          sysChat("A round is under way. Watch a player from the board until the next one starts.");
+          showSpectate();
+        } else if (fresh && m.results) showResults(m.results);
+        return;
+      }
       if (NET.role === "lead" && V.scr !== "intro") commit();
       return;
     }
     if (m.t === "players") {
       const before = otherName();
+      const known = new Set(NET.players.map((p) => p.id));
       NET.players = m.players;
+      if (m.host != null) NET.host = m.host;
+      if (m.phase !== undefined) NET.phase = m.phase;
       syncChat();
+      renderBoard();
       if (NET.onPlayers) NET.onPlayers();
+      if (party()) {
+        for (const p of NET.players) {
+          if (!known.has(p.id) && known.size && p.id !== NET.id) sysChat(`${p.name} joined.`);
+          // announce when someone's game ends
+          const was = prevStatus[p.id];
+          if (was === "playing" && p.status === "out") sysChat(`${p.id === NET.id ? "You're" : p.name + " is"} out with ${money(p.won)}.`);
+          if (was === "playing" && p.status === "top") sysChat(`${p.id === NET.id ? "You" : p.name} won ₹7 Crore!`);
+          prevStatus[p.id] = p.status;
+        }
+        renderSpecBar();
+        return;
+      }
       const other = NET.players.find((p) => p.role !== NET.role);
       if (other && !before) sysChat(`${other.name} joined.`);
       if (NET.role === "lead" && V.scr === "play") {
@@ -323,7 +358,7 @@
       }
       return;
     }
-    if (m.t === "state" && NET.role === "partner") {
+    if (m.t === "state" && duo() && NET.role === "partner") {
       V = m.s;
       if (V.scr === "play" || V.scr === "end") local.replaceChildren();
       render();
@@ -336,42 +371,83 @@
       commit();
       return;
     }
+    // ---- party ----
+    if (m.t === "start" && party()) {
+      NET.round = { seed: m.seed, mode: m.mode, round: m.round };
+      NET.results = null;
+      stopWatching();
+      layer.replaceChildren();
+      local.replaceChildren();
+      sysChat(`Round ${m.round} has started. Everyone gets the same questions.`);
+      V.outfit = newOutfit();
+      startGame(NET.round);
+      return;
+    }
+    if (m.t === "pstate" && party()) {
+      if (NET.watching !== m.from) return;
+      V = m.s;
+      if (V.scr === "play" || V.scr === "end") local.replaceChildren();
+      render();
+      renderSpecBar();
+      return;
+    }
+    if (m.t === "results" && party()) {
+      NET.results = m;
+      showResults(m);
+      return;
+    }
+    if (m.t === "lobby" && party()) {
+      NET.results = null;
+      stopWatching();
+      showPartyLobby();
+      return;
+    }
     if (m.t === "chat") {
       NET.chat.push(m);
-      if (NET.chat.length > 60) NET.chat.shift();
+      if (NET.chat.length > 80) NET.chat.shift();
       addChat(m);
       return;
     }
-    if (m.t === "closed" && NET.role === "partner") sysChat("The room was closed.");
+    if (m.t === "closed" && duo() && NET.role === "partner") sysChat("The room was closed.");
   }
 
   // ---------- chat panel ----------
   const chatLog = $("#kbcChatLog");
+  const mine = (m) => (party() ? m.id === NET.id : m.role === NET.role);
   function addChat(m) {
-    const li = el("li", m.sys ? "sys" : m.role === NET.role ? "me" : "them");
+    const li = el("li", m.sys ? "sys" : mine(m) ? "me" : "them");
     if (!m.sys) li.append(el("b", null, m.by));
     li.append(el("span", null, m.text));
     chatLog.append(li);
     chatLog.scrollTop = chatLog.scrollHeight;
-    if (!m.sys && m.role !== NET.role && !root.classList.contains("chat-open")) $("#kbcChatBtn").classList.add("ping");
+    if (!m.sys && !mine(m) && !root.classList.contains("chat-open")) $("#kbcChatBtn").classList.add("ping");
   }
   function sysChat(text) {
     addChat({ sys: true, text });
   }
   function syncChat() {
-    const on = duo();
+    const on = !!NET.code;
     $("#kbcChat").hidden = !on;
     $("#kbcChatBtn").hidden = !on;
+    $("#kbcBoard").hidden = !party();
     root.classList.toggle("is-duo", on);
     if (!on) {
       chatLog.replaceChildren();
+      $("#kbcSpec").hidden = true;
       return;
     }
-    const other = NET.players.find((p) => p.role !== NET.role);
-    $("#kbcChatTitle").textContent = other ? `Chat with ${other.name}` : "Chat";
     const who = $("#kbcChatWho");
-    who.textContent = other ? (other.online ? "● online" : "○ away") : "waiting for a partner";
-    who.className = other && other.online ? "on" : "";
+    if (party()) {
+      const online = NET.players.filter((p) => p.online).length;
+      $("#kbcChatTitle").textContent = `Room ${NET.code} chat`;
+      who.textContent = `● ${online} of ${NET.players.length} online`;
+      who.className = "on";
+    } else {
+      const other = NET.players.find((p) => p.role !== NET.role);
+      $("#kbcChatTitle").textContent = other ? `Chat with ${other.name}` : "Chat";
+      who.textContent = other ? (other.online ? "● online" : "○ away") : "waiting for a partner";
+      who.className = other && other.online ? "on" : "";
+    }
     if (!chatLog.childNodes.length) NET.chat.forEach(addChat);
     const chips = $("#kbcChips");
     chips.replaceChildren();
@@ -380,16 +456,57 @@
       b.type = "button";
       b.addEventListener("click", () => {
         netSend({ t: "chat", text });
-        if (j != null && NET.role === "partner") netSend({ t: "suggest", j });
+        if (j != null && duo() && NET.role === "partner") netSend({ t: "suggest", j });
       });
       chips.append(b);
     };
-    LETTERS.forEach((L, j) => mk(L, `I think it's ${L}.`, j));
-    mk("Not sure", "I'm not sure about this one.");
-    mk("Lifeline?", "Should we use a lifeline?");
-    mk("Quit?", "Maybe we should quit here.");
-    mk("Go for it", "Go for it! Lock it.");
+    if (party()) {
+      mk("Good luck!", "Good luck, everyone!");
+      mk("Nice one", "Nice one!");
+      mk("So close", "So close!");
+      mk("Tough one", "That's a tough one.");
+      mk("Easy!", "That one was easy.");
+      mk("Hurry up", "Come on, we're waiting!");
+    } else {
+      LETTERS.forEach((L, j) => mk(L, `I think it's ${L}.`, j));
+      mk("Not sure", "I'm not sure about this one.");
+      mk("Lifeline?", "Should we use a lifeline?");
+      mk("Quit?", "Maybe we should quit here.");
+      mk("Go for it", "Go for it! Lock it.");
+    }
   }
+
+  // ---------- party scoreboard: who's on which question, and who's out ----------
+  const STATUS = { lobby: "in the room", watching: "watching", playing: "playing", out: "out", top: "₹7 Crore!" };
+  function renderBoard() {
+    const board = $("#kbcBoard");
+    if (!party()) return;
+    board.replaceChildren();
+    const rows = [...NET.players].sort((a, b) => (b.status === "playing") - (a.status === "playing") || b.won - a.won);
+    for (const p of rows) {
+      const li = el("li", `${p.status}${p.id === NET.id ? " me" : ""}${p.id === NET.watching ? " watched" : ""}${p.online ? "" : " away"}`);
+      const nm = el("span", "kbc-bd-name", p.name + (p.id === NET.id ? " (you)" : "") + (p.id === NET.host ? " ★" : ""));
+      const st =
+        NET.phase === "playing" && p.status === "playing" ? `Q${p.i + 1} · ${money(p.won)}`
+        : NET.phase !== "lobby" && (p.status === "out" || p.status === "top") ? `${STATUS[p.status]} · ${money(p.won)}`
+        : STATUS[p.status] || "";
+      li.append(nm, el("span", "kbc-bd-st", st + (p.online ? "" : " · away")));
+      // anyone who isn't in the hot seat can tap a player to watch them
+      const canWatch = p.id !== NET.id && NET.phase === "playing" && !iAmPlaying();
+      if (canWatch) {
+        li.classList.add("can");
+        li.tabIndex = 0;
+        li.title = `Watch ${p.name}`;
+        const go = () => watch(p.id);
+        li.addEventListener("click", go);
+        li.addEventListener("keydown", (e) => e.key === "Enter" && go());
+      }
+      board.append(li);
+    }
+  }
+  const me = () => NET.players.find((p) => p.id === NET.id) || {};
+  const iAmPlaying = () => party() && NET.phase === "playing" && me().status === "playing";
+
   $("#kbcChatForm").addEventListener("submit", (e) => {
     e.preventDefault();
     const inp = $("#kbcChatIn");
@@ -425,6 +542,26 @@
   function commit() {
     render();
     if (duo() && NET.role === "lead") netSend({ t: "state", s: V });
+    // in a group game your screen goes to the server, which passes it to anyone watching you
+    else if (party() && isLead() && G && G.party && NET.phase === "playing" && (V.scr === "play" || V.scr === "end")) sendMine();
+  }
+  // at most ~2.5 screen updates a second (the latest always gets through), so the server's
+  // per-connection limit never drops the messages that matter, like "done"
+  let mineAt = 0, mineT = 0;
+  function sendMine() {
+    const wait = 400 - (Date.now() - mineAt);
+    if (wait <= 0) {
+      clearTimeout(mineT);
+      mineT = 0;
+      mineAt = Date.now();
+      return netSend({ t: "pstate", s: V });
+    }
+    if (!mineT)
+      mineT = setTimeout(() => {
+        mineT = 0;
+        mineAt = Date.now();
+        if (party() && isLead() && G && G.party) netSend({ t: "pstate", s: V });
+      }, wait);
   }
 
   // the host speaks in captions; his mouth moves while the line shows
@@ -456,18 +593,38 @@
   };
 
   // ---------- drawing questions ----------
-  function draw(t, used) {
-    const seen = new Set(store.get("seen", []));
+  // a seeded random source, so every player in a group game draws the same questions in the same order
+  function seeded(seed) {
+    let h = 1779033703 ^ seed.length;
+    for (let i = 0; i < seed.length; i++) h = Math.imul(h ^ seed.charCodeAt(i), 3432918353), (h = (h << 13) | (h >>> 19));
+    return () => {
+      h = (h + 0x6d2b79f5) | 0;
+      let x = Math.imul(h ^ (h >>> 15), 1 | h);
+      x = (x + Math.imul(x ^ (x >>> 7), 61 | x)) ^ x;
+      return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  function draw(t, used, r) {
     const pool = D.tiers[t].map((_, k) => `${t}:${k}`).filter((id) => !used.has(id));
-    let fresh = pool.filter((id) => !seen.has(id));
-    if (!fresh.length) {
-      store.set("seen", [...seen].filter((id) => !id.startsWith(t + ":")));
-      fresh = pool;
+    let fresh = pool;
+    if (!r) {
+      // on your own, prefer questions you haven't seen yet
+      const seen = new Set(store.get("seen", []));
+      fresh = pool.filter((id) => !seen.has(id));
+      if (!fresh.length) {
+        store.set("seen", [...seen].filter((id) => !id.startsWith(t + ":")));
+        fresh = pool;
+      }
     }
-    const id = pick(fresh);
+    const rand = r || Math.random;
+    const id = fresh[Math.floor(rand() * fresh.length)];
     used.add(id);
     const [q, opts, ans, why] = D.tiers[t][+id.split(":")[1]];
-    const order = shuffle([0, 1, 2, 3]);
+    const order = [0, 1, 2, 3];
+    for (let i = 3; i > 0; i--) {
+      const j = Math.floor(rand() * (i + 1));
+      [order[i], order[j]] = [order[j], order[i]];
+    }
     return { id, q, opts: order.map((j) => opts[j]), ans: order.indexOf(ans), why, tier: t };
   }
   function markSeen(id) {
@@ -499,7 +656,7 @@
     $("#kbcSay").textContent = V.say;
     $("#kbcBubble").classList.toggle("empty", !V.say);
     $("#kbcSkip").hidden = !(controller && V.talk && sayDone);
-    $("#kbcTag").textContent = V.scr === "play" || V.scr === "end" ? `${V.mode === "tough" ? "Tough" : "Normal"}${V.duo ? " · Two players" : ""}` : "";
+    $("#kbcTag").textContent = V.scr === "play" || V.scr === "end" ? `${V.mode === "tough" ? "Tough" : "Normal"}${V.duo ? " · Two players" : V.party ? " · Group game" : ""}` : "";
     renderLadder();
 
     // the question area
@@ -771,19 +928,20 @@
     fw.append(el("b", null, "Fastest Finger First"), el("small", null, "Race nine others to the hot seat first"));
     fffRow.append(fffBox, el("i"), fw);
     b.append(
-      seg("Players", [["solo", "Solo", "Just you"], ["duo", "With a partner", "You lock; they help and chat"]], players, (v) => {
+      seg("Players", [["solo", "Solo", "Just you"], ["duo", "With a partner", "You lock; they help and chat"], ["party", "Group game", "Up to 8, same questions"]], players, (v) => {
         players = v;
         store.set("players", v);
-        fffRow.hidden = v === "duo";
+        fffRow.hidden = v !== "solo";
       })
     );
-    fffRow.hidden = players === "duo";
+    fffRow.hidden = players !== "solo";
     b.append(fffRow);
     const getName = () => (playerName = inp.value.trim().slice(0, 20) || "Contestant");
     const go = button("Play  →", "gold big", () => {
       getName();
       store.set("name", playerName);
       if (players === "duo") return showLobby();
+      if (players === "party") return showPartyLobby(true);
       V.outfit = newOutfit(); // one outfit for the whole game, Fastest Finger First included
       local.replaceChildren();
       if (fffBox.checked) startFFF();
@@ -879,6 +1037,10 @@
       NET.onPlayers = null;
       NET.onJoined = () => {
         status.textContent = "";
+        if (party()) {
+          if (NET.phase === "lobby") showPartyLobby();
+          return;
+        }
         V = blankV();
         V.say = `You're in. Waiting for ${otherName() || "your partner"} to start.`;
         render();
@@ -896,6 +1058,187 @@
     cin.addEventListener("input", () => (cin.value = cin.value.toUpperCase().replace(/[^A-Z]/g, "")));
     cin.addEventListener("keydown", (e) => e.key === "Enter" && go.click());
     setTimeout(() => (code ? go : cin).focus(), 50);
+  }
+
+  // =====================================================================
+  // Group game: lobby, watching other players, results
+  // =====================================================================
+  function showPartyLobby(create) {
+    NET.onJoined = NET.onPlayers = null;
+    const b = box(local, "kbc-lobby kbc-party");
+    b.append(el("p", "kbc-eyebrow", "Group game"), el("h3", "kbc-h", "Your room"));
+    if (needServer(b)) return;
+    const info = el("div", "kbc-lobby-info", "Creating a room…");
+    const who = el("ul", "kbc-players");
+    const err = el("p", "kbc-err");
+    const modeWrap = el("div", "kbc-row kbc-mode-pick");
+    const start = button("Start the round  →", "gold big", () => {
+      err.textContent = "";
+      netSend({ t: "start", mode });
+    });
+    const note = el("p", "kbc-p small");
+    b.append(info, who, modeWrap, note, err, row(button("Leave", "", () => (netLeave(), showIntro())), start));
+    const sync = () => {
+      if (!party() || !b.isConnected) return;
+      info.replaceChildren();
+      const link = `${location.origin}${location.pathname}?kbcroom=${NET.code}`;
+      const copy = button("Copy invite link", "small", async () => {
+        try {
+          await navigator.clipboard.writeText(link);
+          copy.textContent = "Copied ✓";
+        } catch {
+          copy.textContent = link;
+        }
+      });
+      info.append(el("span", null, "Room code"), el("b", "kbc-code", NET.code), copy);
+      who.replaceChildren(
+        ...NET.players.map((p) => el("li", p.online ? "on" : "", `${p.name}${p.id === NET.id ? " (you)" : ""}${p.id === NET.host ? " · host" : ""}${p.online ? "" : " · away"}`))
+      );
+      const online = NET.players.filter((p) => p.online).length;
+      if (online < 2) who.append(el("li", "wait", "Waiting for friends to join… share the code or the link."));
+      modeWrap.replaceChildren();
+      if (isHost()) {
+        for (const [v, label] of [["normal", "Normal"], ["tough", "Tough"]]) {
+          modeWrap.append(
+            button(label, "small" + (mode === v ? " gold" : ""), () => {
+              mode = v;
+              store.set("mode", v);
+              sync();
+            })
+          );
+        }
+        note.textContent = `Up to 8 players. Everyone gets the same ${N} questions and plays at their own pace. If you're out, you can watch the others, and everyone can chat. Most money wins.`;
+        start.hidden = false;
+        start.disabled = online < 2;
+      } else {
+        note.textContent = `${nameOf(NET.host)} starts the round. Everyone gets the same ${N} questions; most money wins. If you're out, you can watch the others.`;
+        start.hidden = true;
+      }
+    };
+    NET.onJoined = sync;
+    NET.onPlayers = sync;
+    NET.onError = (msg) => (err.textContent = msg);
+    if (party()) sync();
+    else if (create) {
+      if (NET.code) netLeave();
+      netConnect(() => netSend({ t: "create", kind: "party", name: playerName }));
+    }
+    V = Object.assign(blankV(), { outfit: V.outfit, say: "Gather your friends. Same questions for everyone; the most money wins." });
+    render();
+    renderBoard();
+  }
+
+  // watching another player's game, read-only
+  function watch(id) {
+    if (!party() || iAmPlaying()) return;
+    if (NET.watching == null) NET.myV = V;
+    NET.watching = id;
+    netSend({ t: "watch", id });
+    T++;
+    stopTimer();
+    layer.replaceChildren();
+    local.replaceChildren();
+    lastModal = lastQid = null;
+    V = Object.assign(blankV(), { outfit: V.outfit, say: `Watching ${nameOf(id)}…` });
+    render();
+    renderSpecBar();
+    renderBoard();
+  }
+  function stopWatching() {
+    if (NET.watching == null) return;
+    netSend({ t: "watch", id: null });
+    NET.watching = null;
+    layer.replaceChildren();
+    lastModal = lastQid = null;
+    if (NET.myV) V = NET.myV;
+    NET.myV = null;
+    render();
+    renderSpecBar();
+    renderBoard();
+  }
+  function renderSpecBar() {
+    const bar = $("#kbcSpec");
+    bar.hidden = !(party() && NET.watching != null);
+    if (bar.hidden) return;
+    const p = NET.players.find((x) => x.id === NET.watching);
+    const where = !p ? "" : p.status === "playing" ? ` · Q${p.i + 1} · ${money(p.won)}` : ` · ${STATUS[p.status] || ""}`;
+    bar.replaceChildren(
+      el("span", "kbc-spec-eye", "●"),
+      el("span", "kbc-spec-txt", `Watching ${p ? p.name : "a player"}${where}`),
+      button("Switch", "small", showSpectate),
+      button("Stop", "small", () => {
+        stopWatching();
+        if (NET.results) showResults(NET.results);
+      })
+    );
+  }
+  function showSpectate() {
+    if (!party()) return;
+    const b = box(local, "kbc-lobby kbc-watch");
+    b.append(el("p", "kbc-eyebrow", "Watch a player"), el("h3", "kbc-h", "Who do you want to watch?"));
+    const list = el("ul", "kbc-players kbc-pick");
+    const others = NET.players.filter((p) => p.id !== NET.id && p.status === "playing");
+    for (const p of others) {
+      const li = el("li", "on can");
+      li.tabIndex = 0;
+      li.append(el("b", null, p.name), el("span", null, ` · Q${p.i + 1} · ${money(p.won)}`));
+      const go = () => watch(p.id);
+      li.addEventListener("click", go);
+      li.addEventListener("keydown", (e) => e.key === "Enter" && go());
+      list.append(li);
+    }
+    if (!others.length) list.append(el("li", "wait", NET.results ? "Everyone has finished." : "Nobody else is playing right now."));
+    b.append(list, el("p", "kbc-p small", "You'll see their screen live, but can't answer for them. The chat stays open for everyone."));
+    b.append(row(button("Back", "", () => (local.replaceChildren(), NET.results && NET.watching == null ? showResults(NET.results) : null))));
+  }
+
+  const HOW = { top: "won it all", quit: "walked away", wrong: "wrong answer", timeup: "ran out of time", left: "left the game" };
+  function showResults(res) {
+    if (!party()) return;
+    if (NET.watching != null) {
+      netSend({ t: "watch", id: null });
+      NET.watching = null;
+      if (NET.myV) V = NET.myV;
+      NET.myV = null;
+      lastModal = lastQid = null;
+      renderSpecBar();
+    }
+    T++;
+    stopTimer();
+    layer.replaceChildren();
+    const rows = res.rows || [];
+    const top = rows[0];
+    const tie = rows.length > 1 && rows[1].won === top.won && rows[1].right === top.right;
+    const b = box(local, "kbc-results");
+    b.append(el("p", "kbc-eyebrow", `Round ${res.round} results · ${res.mode === "tough" ? "Tough" : "Normal"}`));
+    b.append(el("h3", "kbc-h", top ? (top.won ? `${top.name} wins with ${money(top.won)}!` : "Nobody won any money this time.") : "Results"));
+    b.append(el("p", "kbc-p small", `Everyone played the same ${N} questions.${tie ? " Level on money and answers, so the quicker finisher ranks higher." : ""}`));
+    const ol = el("ol", "kbc-res");
+    rows.forEach((r, k) => {
+      const li = el("li", (k === 0 && r.won ? "win " : "") + (r.id === NET.id ? "me" : ""));
+      li.style.setProperty("--d", `${k * 0.08}s`);
+      li.append(
+        el("span", "kbc-res-rank", k === 0 && r.won ? "👑" : String(k + 1)),
+        el("span", "kbc-res-name", r.name + (r.id === NET.id ? " (you)" : "")),
+        el("span", "kbc-res-how", `${r.right}/${N} right · ${HOW[r.how] || ""}`),
+        el("b", "kbc-res-amt", money(r.won))
+      );
+      ol.append(li);
+    });
+    b.append(ol);
+    if (isHost()) {
+      const again = button("Play another round  →", "gold big", () => netSend({ t: "start", mode }));
+      b.append(row(button("Leave", "", () => close(true)), button("Back to the room", "", () => netSend({ t: "lobby" })), again));
+    } else b.append(el("p", "kbc-p small center", `Waiting for ${nameOf(NET.host)} to start the next round…`), row(button("Leave the room", "", () => close(true))));
+    V.scr = "end";
+    V.q = null;
+    V.modal = null;
+    if (top && top.won) {
+      setHost(top.id === NET.id ? "laugh" : "proud", "clap");
+      fx({ k: "pataka", level: 3 });
+      say(top.id === NET.id ? `Congratulations, ${top.name}! You won this round.` : `${top.name} takes this round with ${money(top.won)}!`, { ms: 4200 });
+    } else render();
+    renderBoard();
   }
 
   // =====================================================================
@@ -1027,16 +1370,25 @@
   // =====================================================================
   // Hot seat (solo, or the lead in two-player)
   // =====================================================================
-  async function startGame() {
+  async function startGame(round) {
     const t = ++T;
     const used = new Set();
-    const tiers = TIERS[mode] || TIERS.normal;
-    G = { used, tiers, qs: tiers.map((tier) => draw(tier, used)), log: [], expert: null };
+    const m = round ? round.mode : mode;
+    const tiers = TIERS[m] || TIERS.normal;
+    let qs, alt = null;
+    if (round) {
+      // a group round: the same questions, and the same spare questions for Flip, for everyone
+      const r = seeded(String(round.seed));
+      qs = tiers.map((tier) => draw(tier, used, r));
+      alt = tiers.map((tier) => draw(tier, used, r));
+    } else qs = tiers.map((tier) => draw(tier, used));
+    G = { used, tiers, qs, alt, log: [], expert: null, party: !!round, end: null };
     const outfit = V.outfit;
     V = blankV();
     V.outfit = outfit;
-    V.mode = mode;
+    V.mode = m;
     V.duo = duo();
+    V.party = !!round;
     V.names = { lead: playerName, partner: duo() ? otherName() : "" };
     V.scr = "play";
     lastQid = lastModal = null;
@@ -1088,7 +1440,7 @@
 
   function tapOption(j) {
     if (V.phase !== "answer" || V.removed.includes(j)) return;
-    if (!isLead()) return netSend({ t: "suggest", j });
+    if (!isLead()) return duo() ? netSend({ t: "suggest", j }) : undefined;
     V.sel = j;
     nudge.last = Date.now();
     say(line("lockAsk", { L: LETTERS[j] }), { ms: 1600 });
@@ -1242,6 +1594,7 @@
   // the full solution after every question
   function solution(kind) {
     const q = Q();
+    if (kind !== "right") G.end = kind;
     let expert = null;
     if (G.expert) expert = `${G.expert.who} said ${LETTERS[G.expert.guess]}. ${G.expert.guess === q.ans ? "Spot on." : "Not this time."}`;
     V.modal = { id: ++seq, k: "sol", kind, pick: V.sel, why: q.why, expert, i: V.i };
@@ -1314,7 +1667,10 @@
       await say(line("flip"), { ms: 1300 });
       if (t !== T) return;
       const t2 = ++T;
-      G.qs[V.i] = draw(G.tiers[V.i], G.used);
+      if (G.alt && G.alt[V.i]) {
+        G.qs[V.i] = G.alt[V.i];
+        G.alt[V.i] = null;
+      } else G.qs[V.i] = draw(G.tiers[V.i], G.used);
       const nq = G.qs[V.i];
       markSeen(nq.id);
       G.expert = null;
@@ -1368,6 +1724,7 @@
     V.scr = "end";
     V.q = null;
     V.modal = { id: ++seq, k: "end", amt, jackpot, right: G.log.filter((x) => x.right).length, quit: G.log.some((x) => x.quit) };
+    if (G.party && party()) netSend({ t: "done", won: amt, right: V.modal.right, how: jackpot ? "top" : G.end || "wrong" });
     if (amt) {
       setHost(jackpot ? "laugh" : "proud", "namaste");
       fx({ k: "pataka", level: jackpot || amt >= 1e6 ? 3 : 2 });
@@ -1390,7 +1747,14 @@
     amtBox.append(el("small", null, "₹"), amtEl);
     cheque.append(top, pay, el("div", "kbc-cq-words", amountInWords(m.amt)), amtBox, el("div", "kbc-cq-sign", "Host"));
     b.append(el("p", "kbc-eyebrow", m.jackpot ? "Crorepati!" : "Game over"), cheque, el("p", "kbc-p center", `${m.right} of ${N} answered correctly${m.quit ? " · walked away while ahead" : ""}.`));
-    if (controller)
+    if (V.party && party()) {
+      // group game: your result goes on the board; watch the others until everyone's done
+      if (controller) {
+        const playing = NET.players.filter((p) => p.status === "playing" && p.id !== NET.id).length;
+        b.append(el("p", "kbc-p small center", playing ? `${playing} still playing. The results come up when the last one finishes.` : "Waiting for the results…"));
+        b.append(row(button("Leave the room", "", () => close(true)), NET.results ? button("See the results", "gold", () => showResults(NET.results)) : button("Watch the others", "gold", showSpectate)));
+      } else b.append(row(button("Watch someone else", "gold", showSpectate)));
+    } else if (controller)
       b.append(
         row(
           button("Exit", "", () => close(true)),
@@ -1428,6 +1792,7 @@
       ["✚", "Four lifelines", "50:50, Audience poll, Ask the expert and Flip the question. The clock pauses while you use one."],
       ["◐", "Normal or Tough", "Normal climbs like the show, from everyday questions to deep cuts. Tough starts hard and stays hard."],
       ["⚇", "Two players", "Create a room and share the code. You lock the answers and use the lifelines; your partner sees everything, taps an answer to suggest it, and you both chat."],
+      ["♛", "Group game", "Up to 8 players get the same questions and play at the same time. If you're out, tap anyone on the board to watch them live. Everyone can chat, and the results show who won how much."],
       ["⌨", "Keys", "A–D or 1–4 to choose, Enter to lock in and to move on."],
     ].forEach(([i, h, s], k) => {
       const li = el("li");
@@ -1487,7 +1852,7 @@
     if (sayDone) sayDone();
     if (fireworks) fireworks.stop();
     if (celebration) celebration.stop();
-    if (duo()) netLeave();
+    if (NET.code) netLeave();
     layer.replaceChildren();
     local.replaceChildren();
     G = null;

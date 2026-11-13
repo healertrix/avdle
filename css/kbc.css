@@ -380,3 +380,40 @@ body.kbc-open { overflow: hidden; }
   .kbc-q { min-height: 72px; }
   .kbc-opt { min-height: 44px; }
 }
+
+/* ---------- group game: scoreboard, watching bar, results ---------- */
+.kbc-board { list-style: none; margin: 0; padding: 6px 8px; display: grid; gap: 3px; border-bottom: 1px solid var(--k-line); max-height: 38%; overflow-y: auto; }
+.kbc-board[hidden] { display: none; }
+.kbc-board li { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; padding: 6px 9px; border-radius: 8px; font-size: 13px; background: rgba(255, 255, 255, 0.03); border: 1px solid transparent; }
+.kbc-board li.can { cursor: pointer; }
+.kbc-board li.can:hover, .kbc-board li.can:focus-visible { border-color: var(--k-gold); outline: none; }
+.kbc-board li.watched { border-color: var(--k-gold); background: rgba(243, 199, 102, 0.1); }
+.kbc-board li.me .kbc-bd-name { color: var(--k-gold); }
+.kbc-board li.out, .kbc-board li.away { opacity: 0.62; }
+.kbc-board li.top .kbc-bd-st { color: var(--k-gold); font-weight: 800; }
+.kbc-bd-name { font-weight: 700; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kbc-bd-st { color: var(--k-muted); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.kbc-board li.playing .kbc-bd-st { color: var(--k-ink); }
+
+.kbc-spec { position: absolute; top: 4px; left: 50%; transform: translateX(-50%); z-index: 5; display: flex; align-items: center; gap: 8px; max-width: calc(100% - 16px);
+  padding: 6px 8px 6px 12px; border-radius: 999px; background: var(--k-panel); border: 1px solid var(--k-gold); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4); font-size: 13px; }
+.kbc-spec[hidden] { display: none; }
+.kbc-spec-eye { color: var(--k-wrong); animation: kbc-ping 1.4s ease-in-out infinite; }
+.kbc-spec-txt { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+
+.kbc-pick li.can { cursor: pointer; border: 1px solid var(--k-line); border-radius: 8px; padding: 9px 12px; }
+.kbc-pick li.can:hover, .kbc-pick li.can:focus-visible { border-color: var(--k-gold); outline: none; }
+.kbc-mode-pick { justify-content: flex-start; gap: 6px; }
+
+.kbc-res { list-style: none; margin: 10px 0 14px; padding: 0; display: grid; gap: 6px; }
+.kbc-res li { display: grid; grid-template-columns: 34px 1fr auto; grid-template-areas: "rank name amt" "rank how amt"; column-gap: 10px; align-items: center;
+  padding: 9px 12px; border-radius: 10px; background: rgba(255, 255, 255, 0.04); border: 1px solid var(--k-line); animation: kbc-res-in 0.45s both; animation-delay: var(--d, 0s); }
+.kbc-res li.win { border-color: var(--k-gold); background: linear-gradient(90deg, rgba(243, 199, 102, 0.18), rgba(243, 199, 102, 0.04)); }
+.kbc-res li.me .kbc-res-name { color: var(--k-gold); }
+.kbc-res-rank { grid-area: rank; font-size: 18px; font-weight: 900; text-align: center; color: var(--k-muted); }
+.kbc-res li.win .kbc-res-rank { font-size: 22px; }
+.kbc-res-name { grid-area: name; font-weight: 800; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kbc-res-how { grid-area: how; font-size: 12px; color: var(--k-muted); }
+.kbc-res-amt { grid-area: amt; color: var(--k-gold); font-size: 16px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+@keyframes kbc-res-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .kbc-res li { animation: none; } }
