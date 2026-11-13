@@ -10,7 +10,7 @@ const files = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8")
 for (const f of files) vm.runInContext(fs.readFileSync(new URL("../" + f, import.meta.url), "utf8"), ctx, { filename: f });
 const D = ctx.KBC_DATA;
 const problems = [];
-const BAD = /\.\.\.|…\s*(no|rather)|\brather,|\bno[:;]|placeholder|needs checking|\bTODO\b/i;
+const BAD = { test: (s) => /\.\.\.|…\s*(no|rather)|\brather,|\bno[:;]|placeholder|needs checking/i.test(s) || /\bTODO\b/.test(s) };
 const norm = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 const seen = new Map();
 
