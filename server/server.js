@@ -21,7 +21,7 @@ const ROOT = path.join(__dirname, "..");
 // ---------------------------------------------------------------------
 // Static files (only the folders the game needs, nothing else)
 // ---------------------------------------------------------------------
-const PUBLIC = ["index.html", "css/", "js/", "data/", "vendor/"];
+const PUBLIC = ["index.html", "sw.js", "css/", "js/", "data/", "vendor/"];
 const TYPES = { ".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".json": "application/json", ".svg": "image/svg+xml", ".png": "image/png", ".ico": "image/x-icon" };
 const cache = new Map();
 

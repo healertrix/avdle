@@ -214,7 +214,7 @@
     <div class="kbc-body">
       <main class="kbc-stage">
         <div class="kbc-hostrow">
-          <div class="kbc-hostwrap"><div class="kbc-host" id="kbcHost" aria-hidden="true"><canvas id="kbcHostCv"></canvas></div><span class="kbc-outfit" id="kbcOutfit"></span></div>
+          <div class="kbc-hostwrap"><div class="kbc-host" id="kbcHost" aria-hidden="true"><canvas id="kbcHostCv"></canvas></div></div>
           <div class="kbc-bubble" id="kbcBubble" aria-live="polite"><p id="kbcSay"></p><button class="kbc-skip" id="kbcSkip" type="button" hidden aria-label="Skip">›</button></div>
         </div>
         <div class="kbc-play" id="kbcPlay" hidden>
@@ -253,7 +253,7 @@
   const optsEl = $("#kbcOpts");
   const actsEl = $("#kbcActs");
   const lifeEl = $("#kbcLife");
-  const hostLED = FX ? FX.Host($("#kbcHostCv"), $("#kbcOutfit")) : null;
+  const hostLED = FX ? FX.Host($("#kbcHostCv")) : null;
   const fireworks = FX ? FX.Fireworks($("#kbcFw")) : null;
   const celebration = FX ? FX.Celebration($("#kbcCel")) : null;
   const OUTFITS_N = hostLED ? hostLED.count : 12;
