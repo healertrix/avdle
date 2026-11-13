@@ -262,3 +262,10 @@ body.wp-open { overflow: hidden; }
 @media (max-height: 480px) and (orientation: landscape) {
   .wp-panel { max-height: 78dvh; }
 }
+
+/* phones and tablets: iOS Safari won't scroll a container that has pointer-events: none
+   (the panel lets taps through to the map), so the card inside scrolls instead */
+@media (max-width: 899px) {
+  .wp-panel { overflow: visible; display: flex; flex-direction: column; justify-content: flex-end; }
+  .wp-panel > .wp-card { width: 100%; max-height: inherit; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; touch-action: pan-y; }
+}

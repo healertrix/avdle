@@ -191,6 +191,27 @@
     if (phone.matches) swipeAway(d, "y");
   });
 
+  // ---------- on-screen keyboard ----------
+  // iOS keeps the page full height when the keyboard opens and covers the answer bar;
+  // --kb is how much of the page's bottom the keyboard hides, so the bars can sit above it.
+  const vv = window.visualViewport;
+  if (vv) {
+    const root = document.documentElement;
+    let kbFrame = 0;
+    const kb = () => {
+      cancelAnimationFrame(kbFrame);
+      kbFrame = requestAnimationFrame(() => {
+        const typing = document.activeElement && document.activeElement.matches("input:not([type=range]), textarea");
+        const hidden = typing ? Math.max(0, Math.round(innerHeight - vv.height - vv.offsetTop)) : 0;
+        root.style.setProperty("--kb", hidden + "px");
+      });
+    };
+    vv.addEventListener("resize", kb);
+    vv.addEventListener("scroll", kb);
+    document.addEventListener("focusin", kb);
+    document.addEventListener("focusout", () => setTimeout(kb, 50));
+  }
+
   // ---------- Install app ----------
   const item = $("#installItem");
   const iosDlg = $("#iosInstallDlg");
